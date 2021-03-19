@@ -86,7 +86,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         guard let aps = response.notification.request.content
                 .userInfo["aps"] as? [String: AnyObject],
             let link = aps["url-args"]?.firstObject as? String,
-            link.starts(with: "http"),
+            (link.starts(with: "http") || link.starts(with: "app")),
             let url = URL(string: link)
             else {
                 return nil
