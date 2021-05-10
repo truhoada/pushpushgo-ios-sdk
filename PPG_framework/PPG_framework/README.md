@@ -21,7 +21,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         // Override point for customization after application launch.
 
         // Initialize PPG framework
-        PPG.initNotifications("<your_app_id>", application, handler: { result in
+        PPG.initNotifications("<your_app_id>", "<your_app_api_token>", application, handler: { result in
             switch result {
             case .error(let error):
                 // handle error

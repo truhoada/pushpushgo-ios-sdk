@@ -16,10 +16,12 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
     }
 
     public static func initNotifications(
-        _ projectId: String, _ application: UIApplication,
+        _ projectId: String, _ apiToken: String, _ application: UIApplication,
         handler:@escaping (_ result: ActionResult) -> Void) {
 
         SharedData.shared.projectId = projectId
+        SharedData.shared.apiToken = apiToken
+        
         let center = UNUserNotificationCenter.current()
         SharedData.shared.center = center
 

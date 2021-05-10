@@ -14,6 +14,7 @@ class SharedData {
     static var shared = SharedData()
     
     var projectId: String = ""
+    var apiToken: String = ""
     var deviceToken: String = ""
     var subscriberId: String = ""
     
