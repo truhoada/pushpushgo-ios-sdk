@@ -12,6 +12,6 @@ extension URLRequest {
 
     mutating func addStandardHeaders() {
         self.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        self.setValue("85558fee-b1a3-47aa-8167-940a4bfe9438", forHTTPHeaderField: "X-Token")
+        self.setValue(SharedData.shared.apiToken, forHTTPHeaderField: "X-Token")
     }
 }

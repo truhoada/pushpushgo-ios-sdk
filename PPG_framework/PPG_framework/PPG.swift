@@ -15,15 +15,14 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         super.init()
     }
 
-    public static func initNotifications(
-        _ projectId: String, _ application: UIApplication,
-        handler:@escaping (_ result: ActionResult) -> Void) {
-
+    public static func initializeNotifications(projectId: String, apiToken: String) {
         SharedData.shared.projectId = projectId
-        let center = UNUserNotificationCenter.current()
-        SharedData.shared.center = center
+        SharedData.shared.apiToken = apiToken
+        SharedData.shared.center = UNUserNotificationCenter.current()
+    }
 
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+    public static func registerForNotifications(application: UIApplication, handler: @escaping (_ result: ActionResult) -> Void) {
+        SharedData.shared.center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("Init Notifications error: \(error)")
                 handler(.error(error.localizedDescription))
@@ -39,7 +38,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    public static func sendDeviceToken(_ token: Data, handler:@escaping (_ result: ActionResult) -> Void) {
+    public static func sendDeviceToken(_ token: Data, handler: @escaping (_ result: ActionResult) -> Void) {
         let tokenParts = token.map { data in String(format: "%02.2hhx", data) }
         let key = tokenParts.joined()
         let oldKey = SharedData.shared.deviceToken
@@ -55,7 +54,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    public static func unsubscribeUser(handler:@escaping (_ result: ActionResult) -> Void) {
+    public static func unsubscribeUser(handler: @escaping (_ result: ActionResult) -> Void) {
         ApiService.shared.unsubscribeUser { result in
             handler(result)
         }
@@ -122,6 +121,10 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
                 }
             }
         }
+    }
+
+    public static func sendBeacon(_ beacon: Beacon, handler: @escaping (_ result: ActionResult) -> Void) {
+        ApiService.shared.sendBeacon(beacon: beacon, handler: handler)
     }
 
     private static func saveEvent(_ event: Event) {

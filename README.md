@@ -14,14 +14,17 @@ import UserNotifications
 import PPG_framework
 ```
 
-Add initialization code to gioven functions
+Add initialization code to given functions
 
 ```
 func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     // Override point for customization after application launch.
 
     // Initialize PPG framework
-    PPG.initNotifications("<your_app_id>", application, handler: { result in
+    PPG.initializeNotifications(projectId: "<your_app_id>", apiToken: "<your_api_token>")
+    
+    // Register for push notifications if you do not already
+    PPG.registerForNotifications(application: application, handler: { result in
         switch result {
         case .error(let error):
             // handle error

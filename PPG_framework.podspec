@@ -16,7 +16,7 @@ Pod::Spec.new do |spec|
   #
 
   spec.name         = "PPG_framework"
-  spec.version      = "0.0.1"
+  spec.version      = "1.0.0"
   spec.summary      = "PushPushGo framework"
 
   # This description is used to generate tags and improve search results.
@@ -26,7 +26,7 @@ Pod::Spec.new do |spec|
   #   * Finally, don't worry about the indent, CocoaPods strips it!
   spec.description  = "PushPushGo framework description"
 
-  spec.homepage     = "http://goodylabs.com"
+  spec.homepage     = "https://pushpushgo.com/pl/"
   # spec.screenshots  = "www.example.com/screenshots_1.gif", "www.example.com/screenshots_2.gif"
 
 
@@ -78,7 +78,7 @@ Pod::Spec.new do |spec|
   #  Supports git, hg, bzr, svn and HTTP.
   #
 
-  spec.source       = { :git => "https://gitlab.goodylabs.com/pushpushgo/ios-ppgo-sdk.git", :tag => "#{spec.version}" }
+  spec.source = { :git => "git@github.com:ppgco/ios-sdk.git", :tag => spec.version }
 
 
   # ――― Source Code ―――――――――――――――――――――――――――――――――――――――――――――――――――――――――――――― #
@@ -89,7 +89,7 @@ Pod::Spec.new do |spec|
   #  Not including the public_header_files will make all headers public.
   #
 
-  spec.source_files  = "PPG_framework/*.{h,m,swift}", "PPG_framework/**/*.{h,m, swift}", "PPG_framework/Models/*.{h,m,swift}", "PPG_framework/Network/*.{h,m,swift}", "PPG_framework/Extensions/*.{h,m,swift}"
+  spec.source_files = "PPG_framework/PPG_framework/**/*.{h,m,swift}"
   # spec.exclude_files = "Classes/Exclude"
 
   # spec.public_header_files = "Classes/**/*.h"

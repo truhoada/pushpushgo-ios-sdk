@@ -13,9 +13,10 @@ class SharedData {
     
     static var shared = SharedData()
     
-    var projectId: String = ""
-    var deviceToken: String = ""
-    var subscriberId: String = ""
+    var projectId = ""
+    var apiToken = ""
+    var deviceToken = ""
+    var subscriberId = ""
     
     var center: UNUserNotificationCenter!
     
