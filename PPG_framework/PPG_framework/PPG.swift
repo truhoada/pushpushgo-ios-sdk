@@ -45,6 +45,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
         if oldKey == key {
             handler(.error("Token already sent"))
+            return
         }
         SharedData.shared.deviceToken = key
         print("Device token \(key)")
@@ -55,6 +56,8 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
     }
 
     public static func unsubscribeUser(handler: @escaping (_ result: ActionResult) -> Void) {
+        SharedData.shared.deviceToken = ""
+
         ApiService.shared.unsubscribeUser { result in
             handler(result)
         }
