@@ -43,22 +43,28 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         let key = tokenParts.joined()
         let oldKey = SharedData.shared.deviceToken
 
+        print("Device token \(key)")
+
         if oldKey == key {
             handler(.error("Token already sent"))
             return
         }
-        SharedData.shared.deviceToken = key
-        print("Device token \(key)")
 
         ApiService.shared.subscribeUser(token: key) { result in
+            if case .success = result {
+                SharedData.shared.deviceToken = key
+            }
+
             handler(result)
         }
     }
 
     public static func unsubscribeUser(handler: @escaping (_ result: ActionResult) -> Void) {
-        SharedData.shared.deviceToken = ""
-
         ApiService.shared.unsubscribeUser { result in
+            if case .success = result {
+                SharedData.shared.deviceToken = ""
+            }
+
             handler(result)
         }
     }
@@ -112,7 +118,6 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
     public static func sendEventsDataToApi() {
         let savedEvents = getEvents()
-        var tmpEvents = savedEvents
 
         savedEvents.forEach { event in
             event.send { result in
@@ -158,5 +163,4 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         let events = getEvents().filter { $0 != event }
         saveEvents(events)
     }
-
 }
