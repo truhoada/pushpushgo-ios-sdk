@@ -18,7 +18,6 @@ class Event: Codable {
         let formatter = ISO8601DateFormatter()
         
         eventType = .delivered
-        //timestamp = Int(Date().timeIntervalSince1970 * 1000)
         timestamp = formatter.string(from: Date())
         button = nil
         campaign = ""

@@ -60,6 +60,8 @@ class ApiService {
         var request = URLRequest(url: url)
         request.addStandardHeaders()
         request.httpMethod = "DELETE"
+        
+        debugRequest(request: request)
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             // handle the result here.
@@ -78,6 +80,11 @@ class ApiService {
     func sendEvent(event: Event, handler:@escaping (_ result: ActionResult) -> Void) {
         let projectId = SharedData.shared.projectId
         let subscriberId = SharedData.shared.getSubscriberId()
+        
+        if subscriberId == "" {
+            handler(.error("Subscriber ID is not available"))
+            return
+        }
 
         let bodyData = EventBody(
             type: event.eventType.rawValue,
@@ -113,6 +120,11 @@ class ApiService {
     func sendBeacon(beacon: Beacon, handler:@escaping (_ result: ActionResult) -> Void) {
         let projectId = SharedData.shared.projectId
         let subscriberId = SharedData.shared.getSubscriberId()
+        
+        if subscriberId == "" {
+            handler(.error("Subscriber ID is not available"))
+            return
+        }
 
         let requestBody = BeaconBody(beacon: beacon)
 
@@ -142,20 +154,20 @@ class ApiService {
     }
 
     func debugRequest(request: URLRequest) {
-        // Uncomment to log requests
-//        print(request.httpMethod)
-//        print(request)
-//        print(request.allHTTPHeaderFields)
-//        print(String(data: request.httpBody!, encoding: .utf8))
+        print(request.httpMethod)
+        print(request)
+        print(request.allHTTPHeaderFields)
+        if let body = request.httpBody {
+            print(String(data: body, encoding: .utf8))
+        }
     }
 
     func debugResponse(response: URLResponse?, data: Data?, error: Error?) {
-        // Uncomment to log requests
-//        print("data:")
-//        print(data)
-//        print("response:")
-//        print(response)
-//        print("error:")
-//        print(error)
+        print("data:")
+        print(data)
+        print("response:")
+        print(response)
+        print("error:")
+        print(error)
     }
 }
