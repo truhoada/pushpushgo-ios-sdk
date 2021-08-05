@@ -154,20 +154,20 @@ class ApiService {
     }
 
     func debugRequest(request: URLRequest) {
-        print(request.httpMethod)
-        print(request)
-        print(request.allHTTPHeaderFields)
-        if let body = request.httpBody {
-            print(String(data: body, encoding: .utf8))
-        }
+//        print(request.httpMethod)
+//        print(request)
+//        print(request.allHTTPHeaderFields)
+//        if let body = request.httpBody {
+//            print(String(data: body, encoding: .utf8))
+//        }
     }
 
     func debugResponse(response: URLResponse?, data: Data?, error: Error?) {
-        print("data:")
-        print(data)
-        print("response:")
-        print(response)
-        print("error:")
-        print(error)
+//        print("data:")
+//        print(data)
+//        print("response:")
+//        print(response)
+//        print("error:")
+//        print(error)
     }
 }
