@@ -15,7 +15,9 @@ class ApiService {
 
     func subscribeUser(token: String, handler:@escaping (_ result: ActionResult) -> Void) {
         guard let encoded = try? JSONEncoder().encode(["token": token]) else {
-            print("Failed to encode token")
+            let log = "Failed to encode token"
+            print(log)
+            handler(.error(log))
             return
         }
 
@@ -34,7 +36,9 @@ class ApiService {
             self.debugResponse(response: response, data: data, error: error)
 
             guard let data = data else {
-                print("No data in response: \(error?.localizedDescription ?? "Unknown error").")
+                let log = "No data in response: \(error?.localizedDescription ?? "Unknown error")."
+                print(log)
+                handler(.error(log))
                 return
             }
 
@@ -44,10 +48,12 @@ class ApiService {
 
                 SharedData.shared.subscriberId = decodedData._id
 
-                UserDefaults.standard.set(decodedData._id,
-                    forKey: "PPGSubscriberId")
+                UserDefaults.standard.set(decodedData._id, forKey: "PPGSubscriberId")
+                handler(.success)
             } else {
-                print("Invalid response from server")
+                let log = "Invalid response from server"
+                print(log)
+                handler(.error(log))
             }
         }.resume()
     }
