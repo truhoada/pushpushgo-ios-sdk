@@ -15,14 +15,17 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         super.init()
     }
 
-    public static func initializeNotifications(projectId: String, apiToken: String) {
+    public static func initNotifications(
+        _ projectId: String, _ apiToken: String, _ application: UIApplication,
+        handler: @escaping (_ result: ActionResult) -> Void) {
+
         SharedData.shared.projectId = projectId
         SharedData.shared.apiToken = apiToken
-        SharedData.shared.center = UNUserNotificationCenter.current()
-    }
+        
+        let center = UNUserNotificationCenter.current()
+        SharedData.shared.center = center
 
-    public static func registerForNotifications(application: UIApplication, handler: @escaping (_ result: ActionResult) -> Void) {
-        SharedData.shared.center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("Init Notifications error: \(error)")
                 handler(.error(error.localizedDescription))
@@ -37,6 +40,11 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
             handler(.success)
         }
     }
+    
+    public static func changeProjectIdAndToken(_ projectId: String, _ apiToken: String) {
+        SharedData.shared.projectId = projectId
+        SharedData.shared.apiToken = apiToken
+    }
 
     public static func sendDeviceToken(_ token: Data, handler: @escaping (_ result: ActionResult) -> Void) {
         let tokenParts = token.map { data in String(format: "%02.2hhx", data) }
@@ -45,11 +53,24 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
         if oldKey == key {
             handler(.error("Token already sent"))
+            return
         }
         SharedData.shared.deviceToken = key
         print("Device token \(key)")
 
         ApiService.shared.subscribeUser(token: key) { result in
+            handler(result)
+        }
+    }
+    
+    public static func resendDeviceToken(handler: @escaping (_ result: ActionResult) -> Void) {
+        let token = SharedData.shared.deviceToken
+        if token == "" {
+            handler(.error("Token is not available"))
+            return
+        }
+
+        ApiService.shared.subscribeUser(token: token) { result in
             handler(result)
         }
     }
@@ -70,8 +91,9 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         saveEvent(clickEvent)
     }
 
-    public static func notificationButtonClicked(response: UNNotificationResponse,
-                                                 button: Int) {
+    public static func notificationButtonClicked(
+        response: UNNotificationResponse, button: Int) {
+        
         let campaign = response.notification.request.content
             .userInfo["campaign"] as? String
 
@@ -94,7 +116,8 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         return url
     }
 
-    public static func modifyNotification(_ notification: UNMutableNotificationContent) -> UNMutableNotificationContent {
+    public static func modifyNotification(
+        _ notification: UNMutableNotificationContent) -> UNMutableNotificationContent {
 
         guard let imageUrl = notification.userInfo["image"] as? String
             else { return notification }
@@ -109,7 +132,6 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
     public static func sendEventsDataToApi() {
         let savedEvents = getEvents()
-        var tmpEvents = savedEvents
 
         savedEvents.forEach { event in
             event.send { result in
@@ -122,8 +144,10 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
             }
         }
     }
-
-    public static func sendBeacon(_ beacon: Beacon, handler: @escaping (_ result: ActionResult) -> Void) {
+    
+    public static func sendBeacon(
+        _ beacon: Beacon, handler: @escaping (_ result: ActionResult) -> Void) {
+        
         ApiService.shared.sendBeacon(beacon: beacon, handler: handler)
     }
 

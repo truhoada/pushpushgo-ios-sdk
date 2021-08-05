@@ -59,6 +59,8 @@ public class Beacon {
         self.selectors.append(tmpSelector)
     }
     
+    //2021-02-03T08:12:01.023Z
+    
     public func addSelector(_ name: String, _ value: Bool) {
         let tmpSelector = BeaconSelector(name: name, value: value)
         self.selectors.append(tmpSelector)
