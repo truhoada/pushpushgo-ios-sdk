@@ -15,17 +15,14 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         super.init()
     }
 
-    public static func initNotifications(
-        _ projectId: String, _ apiToken: String, _ application: UIApplication,
-        handler: @escaping (_ result: ActionResult) -> Void) {
-
+    public static func initializeNotifications(projectId: String, apiToken: String) {
         SharedData.shared.projectId = projectId
         SharedData.shared.apiToken = apiToken
-        
-        let center = UNUserNotificationCenter.current()
-        SharedData.shared.center = center
+        SharedData.shared.center = UNUserNotificationCenter.current()
+    }
 
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+    public static func registerForNotifications(application: UIApplication, handler: @escaping (_ result: ActionResult) -> Void) {
+        SharedData.shared.center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("Init Notifications error: \(error)")
                 handler(.error(error.localizedDescription))
