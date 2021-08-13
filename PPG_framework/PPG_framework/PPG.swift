@@ -69,6 +69,27 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// Mark given notification as delivered to the user
+    /// This should be called in your NotificationServiceExtension
+    ///
+    /// - Parameter notificationRequest: UNNotificationRequest
+    public static func notificationDelivered(notificationRequest: UNNotificationRequest) {
+        let notificationContent = notificationRequest.content
+
+        guard let campaign = notificationContent.userInfo["campaign"] as? String else { return }
+
+        // In notification extension we don't have access to stored subscriberId from UserDefaults
+        // We have to extract it from notification payload
+        if let subscriberId = notificationContent.userInfo["subscriber"] as? String {
+            SharedData.shared.subscriberId = subscriberId
+        }
+
+        let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
+        saveEvent(deliveryEvent)
+
+        sendEventsDataToApi()
+    }
+
     public static func notificationClicked(response: UNNotificationResponse) {
         let campaign = response.notification.request.content
             .userInfo["campaign"] as? String
