@@ -90,7 +90,8 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
     /// This should be called in your NotificationServiceExtension
     ///
     /// - Parameter notificationRequest: UNNotificationRequest
-    public static func notificationDelivered(notificationRequest: UNNotificationRequest) {
+    public static func notificationDelivered(notificationRequest: UNNotificationRequest,
+                                             handler: @escaping (_ result: ActionResult) -> Void) {
         let notificationContent = notificationRequest.content
 
         guard let campaign = notificationContent.userInfo["campaign"] as? String else { return }
@@ -102,9 +103,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         }
 
         let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
-        saveEvent(deliveryEvent)
-
-        sendEventsDataToApi()
+        deliveryEvent.send(handler: handler)
     }
 
     public static func notificationClicked(response: UNNotificationResponse) {

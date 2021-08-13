@@ -103,17 +103,31 @@ This step is not required but it allows application to display notifications wit
 3. Select `Notification Service Extension`.
 4. Choose a suitable name for it (for example `PPGNotificationServiceExtension`).
 5. Open `NotificationService.swift` file.
-6. Change `didReceive` function to:
+6. Change `didReceive` function to: (use dispatch_group here to make sure that extension returns only when delivery event is sent and notification content is updated)
 
 ```
 override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
     self.contentHandler = contentHandler
-    bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
-            
-    PPG.notificationDelivered(notificationRequest: request)
-            
-    if let bestAttemptContent = bestAttemptContent {
-        contentHandler(PPG.modifyNotification(bestAttemptContent))
+    self.bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
+
+    guard let content = bestAttemptContent else { return }
+
+    // Wait for delivery event result & image fetch before returning from extension
+    let group = DispatchGroup()
+    group.enter()
+    group.enter()
+
+    PPG.notificationDelivered(notificationRequest: request) { _ in
+        group.leave()
+    }
+
+    DispatchQueue.global().async { [weak self]
+        self?.bestAttemptContent = PPG.modifyNotification(content)
+        group.leave()
+    }
+
+    group.notify(queue: .main) {
+        contentHandler(self.bestAttemptContent ?? content)
     }
 }
 
@@ -137,8 +151,8 @@ beacon.send { result in ... }
 Event's purpose is to tell API about newly received notifications. 
 You should send events every time when user:
 
-1. User received notification in extension
-`PPG.notificationDelivered(notificationRequest: UNNotificationRequest)`
+1. Received notification in extension
+`PPG.notificationDelivered(notificationRequest: UNNotificationRequest, handler: @escaping (_ result: ActionResult)`
 
 2. Click on notification
 `PPG.notificationClicked(response: UNNotificationResponse)`
