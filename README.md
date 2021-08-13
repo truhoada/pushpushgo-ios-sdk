@@ -121,7 +121,7 @@ override func didReceive(_ request: UNNotificationRequest, withContentHandler co
         group.leave()
     }
 
-    DispatchQueue.global().async { [weak self]
+    DispatchQueue.global().async { [weak self] in
         self?.bestAttemptContent = PPG.modifyNotification(content)
         group.leave()
     }
