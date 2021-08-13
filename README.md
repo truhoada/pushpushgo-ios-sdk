@@ -110,6 +110,8 @@ override func didReceive(_ request: UNNotificationRequest, withContentHandler co
     self.contentHandler = contentHandler
     bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
             
+    PPG.notificationDelivered(notificationRequest: request)
+            
     if let bestAttemptContent = bestAttemptContent {
         contentHandler(PPG.modifyNotification(bestAttemptContent))
     }
@@ -135,9 +137,13 @@ beacon.send { result in ... }
 Event's purpose is to tell API about newly received notifications. 
 You should send events every time when user:
 
-1. Click on notification
-`PPG.notificationClicked(response: response) { _ in }`
+1. User received notification in extension
+`PPG.notificationDelivered(notificationRequest: UNNotificationRequest)`
+
+2. Click on notification
+`PPG.notificationClicked(response: UNNotificationResponse)`
 
 2. Click button inside notification
-`PPG.notificationButtonClicked(response: response, button: 1) { _ in }`
+`PPG.notificationButtonClicked(response: response, button: 1)`
+
 Available values for `button` are `1` and `2`
