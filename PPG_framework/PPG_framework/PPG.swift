@@ -15,17 +15,14 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         super.init()
     }
 
-    public static func initNotifications(
-        _ projectId: String, _ apiToken: String, _ application: UIApplication,
-        handler: @escaping (_ result: ActionResult) -> Void) {
-
+    public static func initializeNotifications(projectId: String, apiToken: String) {
         SharedData.shared.projectId = projectId
         SharedData.shared.apiToken = apiToken
-        
-        let center = UNUserNotificationCenter.current()
-        SharedData.shared.center = center
+        SharedData.shared.center = UNUserNotificationCenter.current()
+    }
 
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+    public static func registerForNotifications(application: UIApplication, handler: @escaping (_ result: ActionResult) -> Void) {
+        SharedData.shared.center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             if let error = error {
                 print("Init Notifications error: \(error)")
                 handler(.error(error.localizedDescription))
@@ -87,6 +84,26 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
             handler(result)
         }
+    }
+
+    /// Mark given notification as delivered to the user
+    /// This should be called in your NotificationServiceExtension
+    ///
+    /// - Parameter notificationRequest: UNNotificationRequest
+    public static func notificationDelivered(notificationRequest: UNNotificationRequest,
+                                             handler: @escaping (_ result: ActionResult) -> Void) {
+        let notificationContent = notificationRequest.content
+
+        guard let campaign = notificationContent.userInfo["campaign"] as? String else { return }
+
+        // In notification extension we don't have access to stored subscriberId from UserDefaults
+        // We have to extract it from notification payload
+        if let subscriberId = notificationContent.userInfo["subscriber"] as? String {
+            SharedData.shared.subscriberId = subscriberId
+        }
+
+        let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
+        deliveryEvent.send(handler: handler)
     }
 
     public static func notificationClicked(response: UNNotificationResponse) {
