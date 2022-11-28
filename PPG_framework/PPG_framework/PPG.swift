@@ -176,6 +176,10 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         ApiService.shared.sendBeacon(beacon: beacon, handler: handler)
     }
 
+    public static func getAllAvailableProjectTags(handler: @escaping (_ result: [ProjectTag]) -> Void) {
+        ApiService.shared.getAllAvailableProjectTags(handler: handler)
+    }
+
     private static func saveEvent(_ event: Event) {
         var events = getEvents()
 
