@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7DBA8B9E29349FB100FDB6C8 /* ProjectTag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DBA8B9D29349FB100FDB6C8 /* ProjectTag.swift */; };
 		C6160CE124BC5A5C00ACEA7C /* PPG_framework.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C6160CD724BC5A5C00ACEA7C /* PPG_framework.framework */; };
 		C6160CE624BC5A5C00ACEA7C /* PPG_frameworkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6160CE524BC5A5C00ACEA7C /* PPG_frameworkTests.swift */; };
 		C6160CE824BC5A5C00ACEA7C /* PPG_framework.h in Headers */ = {isa = PBXBuildFile; fileRef = C6160CDA24BC5A5C00ACEA7C /* PPG_framework.h */; settings = {ATTRIBUTES = (Public, ); }; };
@@ -45,6 +46,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		7DBA8B9D29349FB100FDB6C8 /* ProjectTag.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ProjectTag.swift; sourceTree = "<group>"; };
 		C6160CD724BC5A5C00ACEA7C /* PPG_framework.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PPG_framework.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		C6160CDA24BC5A5C00ACEA7C /* PPG_framework.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PPG_framework.h; sourceTree = "<group>"; };
 		C6160CDB24BC5A5C00ACEA7C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -127,6 +129,7 @@
 		C655332724C0509A00A5BE17 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				7DBA8B9D29349FB100FDB6C8 /* ProjectTag.swift */,
 				C6160CF324BC5FAD00ACEA7C /* Enums.swift */,
 				C655332824C050C200A5BE17 /* Beacon.swift */,
 				C655332A24C050D500A5BE17 /* Event.swift */,
@@ -311,6 +314,7 @@
 				C630D24324BDEAAD00F86145 /* SharedData.swift in Sources */,
 				C655332B24C050D500A5BE17 /* Event.swift in Sources */,
 				C6160CF424BC5FAD00ACEA7C /* Enums.swift in Sources */,
+				7DBA8B9E29349FB100FDB6C8 /* ProjectTag.swift in Sources */,
 				C655338024DBFB3000EABF8B /* UNNotificationAttachment+Init.swift in Sources */,
 				C6D4914E24C07A1D000B5A6B /* URLRequest+Headers.swift in Sources */,
 				C655332924C050C200A5BE17 /* Beacon.swift in Sources */,
@@ -476,7 +480,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.PPG-framework";
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
@@ -504,7 +508,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.2;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.PPG-framework";
 				PRODUCT_NAME = "$(TARGET_NAME:c99extidentifier)";
 				SKIP_INSTALL = YES;
