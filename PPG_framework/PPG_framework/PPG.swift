@@ -11,6 +11,10 @@ import UserNotifications
 
 public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
+    public static var subscriberId: String {
+        return SharedData.shared.getSubscriberId()
+    }
+
     override public init() {
         super.init()
     }
@@ -174,10 +178,6 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         _ beacon: Beacon, handler: @escaping (_ result: ActionResult) -> Void) {
         
         ApiService.shared.sendBeacon(beacon: beacon, handler: handler)
-    }
-
-    public static func getAllAvailableProjectTags(handler: @escaping (_ result: [ProjectTag]) -> Void) {
-        ApiService.shared.getAllAvailableProjectTags(handler: handler)
     }
 
     private static func saveEvent(_ event: Event) {

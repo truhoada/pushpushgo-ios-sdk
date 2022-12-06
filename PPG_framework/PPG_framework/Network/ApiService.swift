@@ -142,23 +142,4 @@ class ApiService {
             handler(.success)
         }.resume()
     }
-
-    func getAllAvailableProjectTags(handler: @escaping (_ result: [ProjectTag]) -> Void) {
-        let projectId = SharedData.shared.projectId
-
-        let url = URL(string: "\(baseUrl)/project/\(projectId)/tag/search")!
-        var request = URLRequest(url: url)
-        request.addStandardHeaders()
-        request.httpMethod = "POST"
-
-        URLSession.shared.dataTask(with: request) { data, _, error in
-            guard let data = data, let tags = try? JSONDecoder().decode([ProjectTag].self, from: data) else {
-                print("Failed to fetch project tags, error? -> \(error?.localizedDescription)")
-                handler([])
-                return
-            }
-
-            handler(tags)
-        }.resume()
-    }
 }
