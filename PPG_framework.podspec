@@ -16,7 +16,7 @@ Pod::Spec.new do |spec|
   #
 
   spec.name         = "PPG_framework"
-  spec.version      = "1.0.2"
+  spec.version      = "1.1.0"
   spec.summary      = "PushPushGo framework"
 
   # This description is used to generate tags and improve search results.

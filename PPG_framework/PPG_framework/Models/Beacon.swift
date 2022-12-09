@@ -9,9 +9,10 @@
 import Foundation
 
 public class Beacon {
+
     public var selectors: [BeaconSelector]
     public var tags: [BeaconTag]
-    public var tagsToDelete: [String]
+    public var tagsToDelete: [BeaconTag]
     public var customId: String
     
     public init() {
@@ -24,17 +25,21 @@ public class Beacon {
     public func addTag(_ tag: String, _ label: String) {
         tags.append(BeaconTag(tag: tag, label: label))
     }
+
+    public func addTag(_ tag: BeaconTag) {
+        tags.append(tag)
+    }
     
     public func addTags(_ tags: [BeaconTag]) {
         self.tags.append(contentsOf: tags)
     }
     
-    public func addTagToDelete(_ name: String) {
-        self.tagsToDelete.append(name)
+    public func addTagToDelete(_ tag: BeaconTag) {
+        self.tagsToDelete.append(tag)
     }
     
-    public func addTagsToDelete(_ names: [String]) {
-        self.tagsToDelete.append(contentsOf: names)
+    public func addTagsToDelete(_ tags: [BeaconTag]) {
+        self.tagsToDelete.append(contentsOf: tags)
     }
     
     public func addSelector(_ selector: BeaconSelector) {
@@ -78,8 +83,14 @@ public class Beacon {
 }
 
 public struct BeaconTag: Codable {
-    let tag: String
-    let label: String
+
+    public let tag: String
+    public let label: String
+
+    public init(tag: String, label: String) {
+        self.tag = tag
+        self.label = label
+    }
 }
 
 public struct BeaconSelector: Codable {

@@ -11,6 +11,10 @@ import UserNotifications
 
 public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
+    public static var subscriberId: String {
+        return SharedData.shared.getSubscriberId()
+    }
+
     override public init() {
         super.init()
     }

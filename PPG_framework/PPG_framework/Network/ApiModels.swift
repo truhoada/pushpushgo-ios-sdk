@@ -39,7 +39,7 @@ struct EventBodyPayload: Codable {
 struct BeaconBody: Codable {
     var selectors: [BeaconSelector] = []
     var tags: [BeaconTag] = []
-    var tagsToDelete: [String] = []
+    var tagsToDelete: [BeaconTag] = []
     var customId: String = ""
     
     init(beacon: Beacon) {

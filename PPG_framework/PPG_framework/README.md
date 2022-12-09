@@ -103,7 +103,7 @@ override func didReceive(_ request: UNNotificationRequest, withContentHandler co
 let beacon = Beacon()
 beacon.addSelector("Test_Selector", "0")
 beacon.addTag("new_tag", "new_tag_label")
-beacon.addTagToDelete("tag_to_delete")
+beacon.addTagToDelete(BeaconTag(tag: "my_old_tag", label: "my_old_tag_label"))
 beacon.send() { result in }
 ```
 
