@@ -22,6 +22,18 @@ public class Beacon {
         customId = ""
     }
     
+    public func appendTag(_ tag: String, _ label: String, _ ttl: Int64 = 0) {
+        tags.append(BeaconTag(tag: tag, label: label, strategy: .append, ttl: ttl))
+    }
+    
+    public func rewriteTag(_ tag: String, _ label: String, _ ttl: Int64 = 0) {
+        tags.append(BeaconTag(tag: tag, label: label, strategy: .rewrite, ttl: ttl))
+    }
+
+    public func deleteTag(_ tag: String, _ label: String) {
+        tagsToDelete.append(BeaconTag(tag: tag, label: label))
+    }
+    
     public func addTag(_ tag: String, _ label: String) {
         tags.append(BeaconTag(tag: tag, label: label))
     }
@@ -82,15 +94,42 @@ public class Beacon {
     }
 }
 
+
 public struct BeaconTag: Codable {
 
     public let tag: String
     public let label: String
+    public let strategy: String
+    public let ttl: Int64
 
+    public init(tag: String) {
+        self.tag = tag
+        self.label = "default"
+        self.strategy = BeaconTagStrategy.append.rawValue
+        self.ttl = 0
+    }
+    
     public init(tag: String, label: String) {
         self.tag = tag
         self.label = label
+        self.strategy = BeaconTagStrategy.append.rawValue
+        self.ttl = 0
     }
+    
+    public init(tag: String, label: String, strategy: BeaconTagStrategy) {
+        self.tag = tag
+        self.label = label
+        self.strategy = strategy.rawValue
+        self.ttl = 0
+    }
+    
+    public init(tag: String, label: String, strategy: BeaconTagStrategy, ttl: Int64) {
+        self.tag = tag
+        self.label = label
+        self.strategy = strategy.rawValue
+        self.ttl = ttl
+    }
+    
 }
 
 public struct BeaconSelector: Codable {

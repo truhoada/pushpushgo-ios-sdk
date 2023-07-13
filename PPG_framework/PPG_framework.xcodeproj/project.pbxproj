@@ -56,7 +56,7 @@
 		C629360D24BDCC5B00485D4B /* ApiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiService.swift; sourceTree = "<group>"; };
 		C630D24224BDEAAD00F86145 /* SharedData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedData.swift; sourceTree = "<group>"; };
 		C655331E24C034E200A5BE17 /* ApiModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiModels.swift; sourceTree = "<group>"; };
-		C655332824C050C200A5BE17 /* Beacon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Beacon.swift; sourceTree = "<group>"; };
+		C655332824C050C200A5BE17 /* Beacon.swift */ = {isa = PBXFileReference; indentWidth = 4; lastKnownFileType = sourcecode.swift; path = Beacon.swift; sourceTree = "<group>"; tabWidth = 4; };
 		C655332A24C050D500A5BE17 /* Event.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Event.swift; sourceTree = "<group>"; };
 		C655337F24DBFB3000EABF8B /* UNNotificationAttachment+Init.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UNNotificationAttachment+Init.swift"; sourceTree = "<group>"; };
 		C655338124DC30DA00EABF8B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };

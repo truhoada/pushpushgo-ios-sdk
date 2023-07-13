@@ -27,3 +27,8 @@ enum pushCategories: String {
     case oneButtonCategory
     case twoButtonsCategory
 }
+
+public enum BeaconTagStrategy: String, Codable {
+    case append
+    case rewrite
+}

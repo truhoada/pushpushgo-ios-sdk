@@ -9,14 +9,14 @@
 Open AppDelegate.swift file
 Add required imports
 
-```
+```swift
 import UserNotifications
 import PPG_framework
 ```
 
 Add initialization code to given functions
 
-```
+```swift
 func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
     // Override point for customization after application launch.
 
@@ -56,7 +56,7 @@ func application(_ application: UIApplication,
 }
 ```
 
-```
+```swift
 func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
           withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
     
@@ -65,7 +65,7 @@ func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent noti
 }
 ```
 
-```
+```swift
 func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
 
     // Send information about clicked notification to framework
@@ -105,7 +105,7 @@ This step is not required but it allows application to display notifications wit
 5. Open `NotificationService.swift` file.
 6. Change `didReceive` function to: (use dispatch_group here to make sure that extension returns only when delivery event is sent and notification content is updated)
 
-```
+```swift
 override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
     self.contentHandler = contentHandler
     self.bestAttemptContent = (request.content.mutableCopy() as? UNMutableNotificationContent)
@@ -136,12 +136,27 @@ override func didReceive(_ request: UNNotificationRequest, withContentHandler co
 # Usage guide
 
 ### Create and send Beacon
-```
+```swift
 let beacon = Beacon()
-beacon.addSelector("Test_Selector", "value")
+beacon.addSelector("Test_Selector", "0")
+
+// Methods with strategy and ttl support
+// For append tag in concrete category (with ttl, default = 0)
+beacon.appendTag("mytag", "mycategory")
+beacon.appendTag("mytag", "mycategory", 3600)
+
+// For rewrite tag in concrete category (with ttl, default = 0)
+beacon.rewriteTag("mytag", "mycategory")
+beacon.rewriteTag("mytag", "mycategory", 3600)
+
+// For delete tag in concrete category (with ttl, default = 0)
+beacon.deleteTag("mytag", "mycategory");
+
+// Legacy methods (not supports strategy append/rewrite and ttl)
 beacon.addTag("new_tag", "new_tag_label")
-beacon.addTagToDelete("tag_to_delete")
-beacon.send { result in ... }
+beacon.addTagToDelete(BeaconTag(tag: "my_old_tag", label: "my_old_tag_label"))
+
+beacon.send() { result in }
 ```
 
 ### Unsubscribe user
