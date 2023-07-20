@@ -8,14 +8,15 @@
 
 import Foundation
 
-public class Beacon {
+@objcMembers
+public class Beacon: NSObject {
 
     public var selectors: [BeaconSelector]
     public var tags: [BeaconTag]
     public var tagsToDelete: [BeaconTag]
     public var customId: String
     
-    public init() {
+    override public init() {
         selectors = []
         tags = []
         tagsToDelete = []
@@ -63,12 +64,20 @@ public class Beacon {
         self.selectors.append(tmpSelector)
     }
     
-    public func addSelector(_ name: String, _ value: Float) {
+    /// Using for Objective C project
+    public func addSelectorFloat(_ name: String, _ value: Float) {
         let tmpSelector = BeaconSelector(name: name, value: value)
         self.selectors.append(tmpSelector)
     }
     
-    public func addSelector(_ name: String, _ value: Date) {
+    @nonobjc public func addSelector(_ name: String, _ value: Float) {
+        let tmpSelector = BeaconSelector(name: name, value: value)
+        self.selectors.append(tmpSelector)
+    }
+    
+    /// Using for Objective C project
+    /// Date format: 2021-02-03T08:12:01.023Z "yyyy-MM-dd'T'HH:mm:ss.SSS"
+    public func addSelectorDate(_ name: String, _ value: Date) {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
         let formattedDate = formatter.string(from: value) + "Z"
@@ -76,15 +85,39 @@ public class Beacon {
         self.selectors.append(tmpSelector)
     }
     
-    //2021-02-03T08:12:01.023Z
+    /// Date format: 2021-02-03T08:12:01.023Z "yyyy-MM-dd'T'HH:mm:ss.SSS"
+    @nonobjc public func addSelector(_ name: String, _ value: Date) {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+        let formattedDate = formatter.string(from: value) + "Z"
+        let tmpSelector = BeaconSelector(name: name, value: formattedDate)
+        self.selectors.append(tmpSelector)
+    }
+        
+    /// Using for Objective C project
+    public func addSelectorBool(_ name: String, _ value: Bool) {
+        let tmpSelector = BeaconSelector(name: name, value: value)
+        self.selectors.append(tmpSelector)
+    }
     
-    public func addSelector(_ name: String, _ value: Bool) {
+    @nonobjc public func addSelector(_ name: String, _ value: Bool) {
         let tmpSelector = BeaconSelector(name: name, value: value)
         self.selectors.append(tmpSelector)
     }
     
     public func addSelectors(_ selectors: [BeaconSelector]) {
         self.selectors.append(contentsOf: selectors)
+    }
+    
+    public func sendObjC(onSuccess: @escaping() -> Void, onFailure: @escaping(String?) -> Void) {
+        send { result in
+            switch result {
+            case .success:
+                onSuccess()
+            case .error(let error):
+                onFailure(error)
+            }
+        }
     }
     
     public func send(handler:@escaping (_ result: ActionResult) -> Void) {
