@@ -1,10 +1,11 @@
 #  Setup Guide
 
 ### [ Create certificate and upload it ]
+Tutorial: https://docs.pushpushgo.company/application/providers/mobile-push/apns
 
 ### [ install framework (cocoapods or direct download), remember to add pod to extension target ]
 
-### Add required code to AppDelegate
+### **UIKit** Add required code to AppDelegate
 
 Open AppDelegate.swift file
 Add required imports
@@ -83,6 +84,91 @@ func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive respo
     completionHandler()
 }
 ```
+
+### **SwiftUI** Using SwiftUI you will still have to add AppDelegate
+Create AppDelegate.swift file
+```swift
+import Foundation
+import UIKit
+import UserNotifications
+import PPG_framework
+
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        
+        // Initialize PPG
+        PPG.initializeNotifications(projectId: "YOUR PROJECT ID", apiToken: "YOUR API KEY")
+        
+        // Register for notifications
+        PPG.registerForNotifications(application: application) { result in
+            switch result {
+            case .error(let error):
+                print(error)
+                return
+            case .success:
+                print("Successfully registered")
+                return
+            }
+        }
+        
+        UNUserNotificationCenter.current().delegate = self
+        
+        return true
+    }
+    
+    func applicationDidBecomeActive(_ application: UIApplication) {
+      // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+
+      PPG.sendEventsDataToApi()
+    }
+    
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        PPG.sendDeviceToken(deviceToken) { _ in }
+    }
+    
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+              withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        
+        // Display notification when app is in foreground, optional
+        completionHandler([.banner, .badge, .sound])
+    }
+    
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+
+        // Send information about clicked notification to framework
+        PPG.notificationClicked(response: response)
+
+        // Open external link from push notification
+        // Remove this section if this behavior is not expected
+        guard let url = PPG.getUrlFromNotificationResponse(response: response)
+            else {
+                completionHandler()
+                return
+            }
+        UIApplication.shared.open(url)
+        //
+        completionHandler()
+    }
+}
+
+Now you will have to inject that AppDelegate to your mainApp.swift file
+```swift
+import SwiftUI
+
+@main
+struct iOS_example_integrationApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate: AppDelegate
+    
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
+```
+
+``` 
 
 ### Add required capabilities
 
