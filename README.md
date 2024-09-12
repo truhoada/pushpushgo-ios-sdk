@@ -5,7 +5,7 @@ Tutorial: https://docs.pushpushgo.company/application/providers/mobile-push/apns
 
 ### [ install framework (cocoapods or direct download), remember to add pod to extension target ]
 
-### **UIKit** Add required code to AppDelegate
+### UIKit - Add required code to AppDelegate
 
 Open AppDelegate.swift file
 Add required imports
@@ -85,7 +85,7 @@ func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive respo
 }
 ```
 
-### **SwiftUI** Using SwiftUI you will still have to add AppDelegate
+### SwiftUI - Using SwiftUI you will still have to add AppDelegate
 Create AppDelegate.swift file
 ```swift
 import Foundation
@@ -151,6 +151,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         completionHandler()
     }
 }
+```
 
 Now you will have to inject that AppDelegate to your mainApp.swift file
 ```swift
@@ -167,8 +168,6 @@ struct iOS_example_integrationApp: App {
     }
 }
 ```
-
-``` 
 
 ### Add required capabilities
 
