@@ -110,6 +110,21 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         deliveryEvent.send(handler: handler)
     }
 
+    public static func registerNotificationDeliveredFromUserInfo(userInfo: [AnyHashable: Any],
+                                handler: @escaping (_ result: ActionResult) -> Void) {
+
+        guard let campaign = userInfo["campaign"] as? String else { return }
+
+        // In notification extension we don't have access to stored subscriberId from UserDefaults
+        // We have to extract it from notification payload
+        if let subscriberId = userInfo["subscriber"] as? String {
+            SharedData.shared.subscriberId = subscriberId
+        }
+
+        let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
+        deliveryEvent.send(handler: handler)
+    }
+    
     public static func notificationClicked(response: UNNotificationResponse) {
         let campaign = response.notification.request.content
             .userInfo["campaign"] as? String
