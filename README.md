@@ -57,6 +57,19 @@ func application(_ application: UIApplication,
 }
 ```
 
+```
+func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        
+// Send a delivery event to your server
+    PPG.registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { status in
+        print(status);
+    }
+        
+    PPG.sendEventsDataToApi();
+    completionHandler(.newData)
+}
+```
+
 ```swift
 func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
           withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -125,6 +138,17 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func application(_ application: UIApplication,
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         PPG.sendDeviceToken(deviceToken) { _ in }
+    }
+
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        
+        // Send a delivery event to your server
+        PPG.registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { status in
+            print(status);
+        }
+        
+        PPG.sendEventsDataToApi();
+        completionHandler(.newData)
     }
     
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
