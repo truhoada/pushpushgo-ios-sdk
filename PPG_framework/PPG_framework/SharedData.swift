@@ -15,44 +15,44 @@ class SharedData {
 
     var projectId: String {
         get {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             return sharedDefaults?.string(forKey: "PPGProjectId") ?? ""
         }
         set {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGProjectId")
         }
     }
 
     var apiToken: String {
         get {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             return sharedDefaults?.string(forKey: "PPGAPIToken") ?? ""
         }
         set {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGAPIToken")
         }
     }
 
     var subscriberId: String {
         get {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             return sharedDefaults?.string(forKey: "PPGSubscriberId") ?? ""
         }
         set {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGSubscriberId")
         }
     }
 
     var deviceToken: String {
         get {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             return sharedDefaults?.string(forKey: "PPGDeviceToken") ?? ""
         }
         set {
-            let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGDeviceToken")
         }
     }

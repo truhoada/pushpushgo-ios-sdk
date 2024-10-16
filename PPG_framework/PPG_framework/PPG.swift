@@ -187,19 +187,19 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         var events = getEvents()
 
         events.append(event)
-        let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+        let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
         sharedDefaults?.set(try? PropertyListEncoder().encode(events),
                             forKey: "SavedPPGEvents")
     }
 
     private static func saveEvents(_ events: [Event]) {
-        let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+        let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
         sharedDefaults?.set(try? PropertyListEncoder().encode(events),
                             forKey: "SavedPPGEvents")
     }
 
     private static func getEvents() -> [Event] {
-        let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+        let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
         if let data = sharedDefaults?.value(forKey: "SavedPPGEvents") as? Data {
             guard let events = try? PropertyListDecoder()
                 .decode([Event].self, from: data)
