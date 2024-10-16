@@ -12,7 +12,7 @@ import UserNotifications
 public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
     public static var subscriberId: String {
-        return SharedData.shared.getSubscriberId()
+        return SharedData.shared.subscriberId
     }
 
     override public init() {
@@ -41,7 +41,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
             handler(.success)
         }
     }
-    
+
     public static func changeProjectIdAndToken(_ projectId: String, _ apiToken: String) {
         SharedData.shared.projectId = projectId
         SharedData.shared.apiToken = apiToken
@@ -67,7 +67,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
             handler(result)
         }
     }
-    
+
     public static func resendDeviceToken(handler: @escaping (_ result: ActionResult) -> Void) {
         let token = SharedData.shared.deviceToken
         if token == "" {
@@ -100,31 +100,19 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
         guard let campaign = notificationContent.userInfo["campaign"] as? String else { return }
 
-        // In notification extension we don't have access to stored subscriberId from UserDefaults
-        // We have to extract it from notification payload
-        if let subscriberId = notificationContent.userInfo["subscriber"] as? String {
-            SharedData.shared.subscriberId = subscriberId
-        }
-
         let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
         deliveryEvent.send(handler: handler)
     }
 
     public static func registerNotificationDeliveredFromUserInfo(userInfo: [AnyHashable: Any],
-                                handler: @escaping (_ result: ActionResult) -> Void) {
+                                    handler: @escaping (_ result: ActionResult) -> Void) {
 
         guard let campaign = userInfo["campaign"] as? String else { return }
-
-        // In notification extension we don't have access to stored subscriberId from UserDefaults
-        // We have to extract it from notification payload
-        if let subscriberId = userInfo["subscriber"] as? String {
-            SharedData.shared.subscriberId = subscriberId
-        }
 
         let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
         deliveryEvent.send(handler: handler)
     }
-    
+
     public static func notificationClicked(response: UNNotificationResponse) {
         let campaign = response.notification.request.content
             .userInfo["campaign"] as? String
@@ -137,7 +125,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
     public static func notificationButtonClicked(
         response: UNNotificationResponse, button: Int) {
-        
+
         let campaign = response.notification.request.content
             .userInfo["campaign"] as? String
 
@@ -188,10 +176,10 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
             }
         }
     }
-    
+
     public static func sendBeacon(
         _ beacon: Beacon, handler: @escaping (_ result: ActionResult) -> Void) {
-        
+
         ApiService.shared.sendBeacon(beacon: beacon, handler: handler)
     }
 
@@ -199,22 +187,24 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         var events = getEvents()
 
         events.append(event)
-        UserDefaults.standard.set(try? PropertyListEncoder().encode(events),
-                                  forKey: "SavedPPGEvents")
+        let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+        sharedDefaults?.set(try? PropertyListEncoder().encode(events),
+                            forKey: "SavedPPGEvents")
     }
 
     private static func saveEvents(_ events: [Event]) {
-        UserDefaults.standard.set(try? PropertyListEncoder().encode(events),
-                                  forKey: "SavedPPGEvents")
+        let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+        sharedDefaults?.set(try? PropertyListEncoder().encode(events),
+                            forKey: "SavedPPGEvents")
     }
 
     private static func getEvents() -> [Event] {
-        if let data = UserDefaults.standard
-            .value(forKey: "SavedPPGEvents") as? Data {
-            guard let event = try? PropertyListDecoder()
-                .decode(Array<Event>.self, from: data)
+        let sharedDefaults = UserDefaults(suiteName: "group.ppg.shareddata")
+        if let data = sharedDefaults?.value(forKey: "SavedPPGEvents") as? Data {
+            guard let events = try? PropertyListDecoder()
+                .decode([Event].self, from: data)
                 else { return [] }
-            return event
+            return events
         }
         return []
     }
