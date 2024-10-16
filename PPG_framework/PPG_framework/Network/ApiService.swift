@@ -56,7 +56,7 @@ class ApiService {
 
     func unsubscribeUser(handler: @escaping (_ result: ActionResult) -> Void) {
         let projectId = SharedData.shared.projectId
-        let subscriberId = SharedData.shared.getSubscriberId()
+        let subscriberId = SharedData.shared.subscriberId
 
         let url = URL(string: "\(baseUrl)/v1/ios/\(projectId)/subscriber/\(subscriberId)")!
         var request = URLRequest(url: url)
@@ -77,7 +77,7 @@ class ApiService {
 
     func sendEvent(event: Event, handler: @escaping (_ result: ActionResult) -> Void) {
         let projectId = SharedData.shared.projectId
-        let subscriberId = SharedData.shared.getSubscriberId()
+        let subscriberId = SharedData.shared.subscriberId
         
         if subscriberId == "" {
             handler(.error("Subscriber ID is not available"))
@@ -113,7 +113,7 @@ class ApiService {
 
     func sendBeacon(beacon: Beacon, handler: @escaping (_ result: ActionResult) -> Void) {
         let projectId = SharedData.shared.projectId
-        let subscriberId = SharedData.shared.getSubscriberId()
+        let subscriberId = SharedData.shared.subscriberId
         
         if subscriberId == "" {
             handler(.error("Subscriber ID is not available"))
