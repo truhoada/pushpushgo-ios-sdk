@@ -44,7 +44,6 @@ class ApiService {
 
                 SharedData.shared.subscriberId = decodedData._id
 
-                UserDefaults.standard.set(decodedData._id, forKey: "PPGSubscriberId")
                 handler(.success)
             } else {
                 let log = "Invalid response from server"

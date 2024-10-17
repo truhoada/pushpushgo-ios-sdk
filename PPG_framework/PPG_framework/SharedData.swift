@@ -38,7 +38,9 @@ class SharedData {
     var subscriberId: String {
         get {
             let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
-            return sharedDefaults?.string(forKey: "PPGSubscriberId") ?? ""
+            return sharedDefaults?.string(forKey: "PPGSubscriberId") ??
+            // Legacy supported value
+            UserDefaults.standard.string(forKey: "PPGSubscriberId") ?? ""
         }
         set {
             let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
