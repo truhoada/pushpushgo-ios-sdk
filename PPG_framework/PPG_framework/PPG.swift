@@ -14,6 +14,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
     public static var subscriberId: String {
         return SharedData.shared.subscriberId
     }
+    
 
     override public init() {
         super.init()
@@ -96,43 +97,22 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
     /// - Parameter notificationRequest: UNNotificationRequest
     public static func notificationDelivered(notificationRequest: UNNotificationRequest,
                                              handler: @escaping (_ result: ActionResult) -> Void) {
-        let notificationContent = notificationRequest.content
-
-        guard let campaign = notificationContent.userInfo["campaign"] as? String else { return }
-
-        let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
-        deliveryEvent.send(handler: handler)
+        SharedData.shared.eventManager.notificationDelivered(notificationRequest: notificationRequest, handler: handler)
     }
 
     public static func registerNotificationDeliveredFromUserInfo(userInfo: [AnyHashable: Any],
-                                    handler: @escaping (_ result: ActionResult) -> Void) {
-
-        guard let campaign = userInfo["campaign"] as? String else { return }
-
-        let deliveryEvent = Event(eventType: .delivered, button: nil, campaign: campaign)
-        deliveryEvent.send(handler: handler)
+                                                                 handler: @escaping (_ result: ActionResult) -> Void) {
+        SharedData.shared.eventManager.registerNotificationDeliveredFromUserInfo(userInfo: userInfo, handler: handler)
+        
     }
 
     public static func notificationClicked(response: UNNotificationResponse) {
-        let campaign = response.notification.request.content
-            .userInfo["campaign"] as? String
-
-        let clickEvent = Event(eventType: .clicked, button: 0,
-                               campaign: campaign ?? "")
-
-        saveEvent(clickEvent)
+        SharedData.shared.eventManager.notificationClicked(response: response)
     }
 
     public static func notificationButtonClicked(
         response: UNNotificationResponse, button: Int) {
-
-        let campaign = response.notification.request.content
-            .userInfo["campaign"] as? String
-
-        let clickEvent = Event(eventType: .clicked, button: button,
-                               campaign: campaign ?? "")
-
-        saveEvent(clickEvent)
+        SharedData.shared.eventManager.notificationButtonClicked(response: response, button: button)
     }
 
     public static func getUrlFromNotificationResponse(response: UNNotificationResponse) -> URL? {
@@ -163,54 +143,12 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
     }
 
     public static func sendEventsDataToApi() {
-        let savedEvents = getEvents()
-
-        savedEvents.forEach { event in
-            event.send { result in
-                switch result {
-                case .success:
-                    removeSavedEvent(event)
-                case .error:
-                    break
-                }
-            }
-        }
+        SharedData.shared.eventManager.sync()
     }
 
     public static func sendBeacon(
         _ beacon: Beacon, handler: @escaping (_ result: ActionResult) -> Void) {
 
         ApiService.shared.sendBeacon(beacon: beacon, handler: handler)
-    }
-
-    private static func saveEvent(_ event: Event) {
-        var events = getEvents()
-
-        events.append(event)
-        let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
-        sharedDefaults?.set(try? PropertyListEncoder().encode(events),
-                            forKey: "SavedPPGEvents")
-    }
-
-    private static func saveEvents(_ events: [Event]) {
-        let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
-        sharedDefaults?.set(try? PropertyListEncoder().encode(events),
-                            forKey: "SavedPPGEvents")
-    }
-
-    private static func getEvents() -> [Event] {
-        let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
-        if let data = sharedDefaults?.value(forKey: "SavedPPGEvents") as? Data {
-            guard let events = try? PropertyListDecoder()
-                .decode([Event].self, from: data)
-                else { return [] }
-            return events
-        }
-        return []
-    }
-
-    private static func removeSavedEvent(_ event: Event) {
-        let events = getEvents().filter { $0 != event }
-        saveEvents(events)
     }
 }

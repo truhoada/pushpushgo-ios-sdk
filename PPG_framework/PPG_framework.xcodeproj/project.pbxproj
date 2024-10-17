@@ -19,6 +19,7 @@
 		C655332B24C050D500A5BE17 /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = C655332A24C050D500A5BE17 /* Event.swift */; };
 		C655338024DBFB3000EABF8B /* UNNotificationAttachment+Init.swift in Sources */ = {isa = PBXBuildFile; fileRef = C655337F24DBFB3000EABF8B /* UNNotificationAttachment+Init.swift */; };
 		C6D4914E24C07A1D000B5A6B /* URLRequest+Headers.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D4914D24C07A1D000B5A6B /* URLRequest+Headers.swift */; };
+		E5A9415A2CC19E3800A0934B /* EventManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5A941592CC19E3100A0934B /* EventManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +62,7 @@
 		C655337F24DBFB3000EABF8B /* UNNotificationAttachment+Init.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UNNotificationAttachment+Init.swift"; sourceTree = "<group>"; };
 		C655338124DC30DA00EABF8B /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		C6D4914D24C07A1D000B5A6B /* URLRequest+Headers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "URLRequest+Headers.swift"; sourceTree = "<group>"; };
+		E5A941592CC19E3100A0934B /* EventManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +105,7 @@
 		C6160CD924BC5A5C00ACEA7C /* PPG_framework */ = {
 			isa = PBXGroup;
 			children = (
+				E5A941592CC19E3100A0934B /* EventManager.swift */,
 				C6160CDA24BC5A5C00ACEA7C /* PPG_framework.h */,
 				C6160CDB24BC5A5C00ACEA7C /* Info.plist */,
 				C6160CF124BC5BC700ACEA7C /* PPG.swift */,
@@ -308,6 +311,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5A9415A2CC19E3800A0934B /* EventManager.swift in Sources */,
 				C655331F24C034E200A5BE17 /* ApiModels.swift in Sources */,
 				C630D24324BDEAAD00F86145 /* SharedData.swift in Sources */,
 				C655332B24C050D500A5BE17 /* Event.swift in Sources */,
