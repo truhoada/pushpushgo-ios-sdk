@@ -161,17 +161,5 @@ class EventManager {
 
 
 extension ISO8601DateFormatter {
-    static let custom: ISO8601DateFormatter = {
-        var options: ISO8601DateFormatter.Options = [.withFullDate, .withFullTime, .withTimeZone]
-        options = [
-            .withInternetDateTime,
-            .withColonSeparatorInTimeZone
-        ]
-        if #available(iOS 11.0, *) {
-            options.insert(.withFractionalSeconds)
-        }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = options
-        return formatter
-    }()
+    static let custom: ISO8601DateFormatter = Event.iso8601DateFormatter
 }
