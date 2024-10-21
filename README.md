@@ -64,8 +64,6 @@ func application(_ application: UIApplication, didReceiveRemoteNotification user
     PPG.registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { status in
         print(status);
     }
-        
-    PPG.sendEventsDataToApi();
     completionHandler(.newData)
 }
 ```
@@ -146,8 +144,6 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         PPG.registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { status in
             print(status);
         }
-        
-        PPG.sendEventsDataToApi();
         completionHandler(.newData)
     }
     
@@ -201,7 +197,8 @@ struct iOS_example_integrationApp: App {
 4. You can add capability by clicking on `+ Capability` button that is placed under `Signing & Capabilities` button.
 5. Add `Background Modes` capability unless it is already on your capability list. Then select `Remote notifications`.
 6. Add `Push notifications` capability unless it is already on your capability list.
-7. Make sure that your `Provisioning Profile` has required capabilities. If you didn't add them while creating Provisioning Profile for your app you should go to your Apple Developer Center to add them. Then refresh your profile in Xcode project.
+7. Add `App Groups`. Then add new group `group.ppg.sharedDataPPG` and check it (you will need to add group with that name in your `Provisioning Profile` to be able to do that).
+8. Make sure that your `Provisioning Profile` has required capabilities. If you didn't add them while creating Provisioning Profile for your app you should go to your Apple Developer Center to add them. Then refresh your profile in Xcode project.
 
 ### Create Notification Service Extension
 
@@ -213,6 +210,8 @@ This step is not required but it allows application to display notifications wit
 4. Choose a suitable name for it (for example `PPGNotificationServiceExtension`).
 5. Open `NotificationService.swift` file.
 6. Change `didReceive` function to: (use dispatch_group here to make sure that extension returns only when delivery event is sent and notification content is updated)
+7. Click on top item in your project hierarchy and select your NotificationExtension on target list
+8. Similarly to your project, add App Group capability to your NotificationExtension and check `group.ppg.sharedDataPPG`
 
 ```swift
 override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
