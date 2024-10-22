@@ -1,5 +1,11 @@
 #  Setup Guide
 
+> [!IMPORTANT]
+> **Version 2.0.0 Breaking changes**
+> To be able to use v2.0.0 you will need to add AppGroups capability to your project.
+> Check *Add required capabilities* and *Create Notification Service Extension* sections for further instructions.
+> Also recommended: implementation of PPG.registerNotificationDeliveredFromUserInfo() in AppDelegate. Check examples below.
+
 ### [ Create certificate and upload it ]
 Tutorial: https://docs.pushpushgo.company/application/providers/mobile-push/apns
 
