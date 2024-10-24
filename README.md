@@ -1,9 +1,9 @@
 #  Setup Guide
 
 > [!IMPORTANT]
-> **Version 2.0.0 Breaking changes**
+> **Version 2.0.1 Breaking changes**
 >
-> - To be able to use v2.0.0 you will need to add AppGroups capability to your project.
+> - To be able to use v2.0.1 you will need to add AppGroups capability to your project.
 > 
 > - Check *Add required capabilities* and *Create Notification Service Extension* sections for further instructions.
 > 
@@ -206,18 +206,16 @@ struct iOS_example_integrationApp: App {
 4. You can add capability by clicking on `+ Capability` button that is placed under `Signing & Capabilities` button.
 5. Add `Background Modes` capability unless it is already on your capability list. Then select `Remote notifications`.
 6. Add `Push notifications` capability unless it is already on your capability list.
-7. Add `App Groups`. Then add new group `group.ppg.sharedDataPPG` and check it (you will need to add group with that name in your `Provisioning Profile` to be able to do that).
+7. Add `App Groups`. You can use your default app group ID or add new one.
 8. Make sure that your `Provisioning Profile` has required capabilities. If you didn't add them while creating Provisioning Profile for your app you should go to your Apple Developer Center to add them. Then refresh your profile in Xcode project.
 
 > **How to add new group to your provisioning profile?**
 >
-> Go to Apple developers and navigate to *Certificates, Identifiers & Profiles*. Then go to *Identifiers* and in the right corner change *App IDs* to *AppGroups*. Add new group *group.ppg.sharedDataPPG*.
+> Go to Apple developers and navigate to *Certificates, Identifiers & Profiles*. Then go to *Identifiers* and in the right corner change *App IDs* to *AppGroups*. You can add new group here.
 >
-> Now you can go back to *Identifiers*, choose your app identifier and add *AppGroup* capability. Remember to check *group.ppg.sharedDataPPG*.
+> Now you can go back to *Identifiers*, choose your app identifier and add *AppGroup* capability. Remember to check your new group.
 
 ### Create Notification Service Extension
-
-This step is not required but it allows application to display notifications with images.
 
 1. Open your Xcode project
 2. Go to `File -> New -> Target`.
@@ -226,7 +224,8 @@ This step is not required but it allows application to display notifications wit
 5. Open `NotificationService.swift` file.
 6. Change `didReceive` function to: (use dispatch_group here to make sure that extension returns only when delivery event is sent and notification content is updated)
 7. Click on top item in your project hierarchy and select your NotificationExtension on target list
-8. Similarly to your project, add App Group capability to your NotificationExtension and check `group.ppg.sharedDataPPG`
+8. Similarly to your project, add App Group capability to your NotificationExtension and check group you want to use.
+9. In your NotificationService extension, in *didReceive* function set your app group ID.
 
 ```swift
 override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
@@ -239,6 +238,9 @@ override func didReceive(_ request: UNNotificationRequest, withContentHandler co
     let group = DispatchGroup()
     group.enter()
     group.enter()
+
+    // Dynamically set app group ID for your app
+    SharedData.shared.appGroupId = "YOUR APP GROUP ID"
 
     PPG.notificationDelivered(notificationRequest: request) { _ in
         group.leave()
