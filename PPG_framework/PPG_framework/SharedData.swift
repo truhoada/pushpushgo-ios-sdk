@@ -11,7 +11,7 @@ import UserNotifications
 
 public class SharedData {
 
-    static var shared = SharedData()
+    public static var shared = SharedData()
     public var appGroupId: String = ""
     var sharedDefaults: UserDefaults? {
         return UserDefaults(suiteName: appGroupId)
