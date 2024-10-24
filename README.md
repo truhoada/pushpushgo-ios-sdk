@@ -209,6 +209,12 @@ struct iOS_example_integrationApp: App {
 7. Add `App Groups`. Then add new group `group.ppg.sharedDataPPG` and check it (you will need to add group with that name in your `Provisioning Profile` to be able to do that).
 8. Make sure that your `Provisioning Profile` has required capabilities. If you didn't add them while creating Provisioning Profile for your app you should go to your Apple Developer Center to add them. Then refresh your profile in Xcode project.
 
+> **How to add new group to your provisioning profile?**
+>
+> Go to Apple developers and navigate to *Certificates, Identifiers & Profiles*. Then go to *Identifiers* and in the right corner change *App IDs* to *AppGroups*. Add new group *group.ppg.sharedDataPPG*.
+>
+> Now you can go back to *Identifiers*, choose your app identifier and add *AppGroup* capability. Remember to check *group.ppg.sharedDataPPG*.
+
 ### Create Notification Service Extension
 
 This step is not required but it allows application to display notifications with images.
