@@ -31,7 +31,7 @@ func application(_ application: UIApplication, didFinishLaunchingWithOptions lau
     // Override point for customization after application launch.
 
     // Initialize PPG framework
-    PPG.initializeNotifications(projectId: "<your_app_id>", apiToken: "<your_api_token>")
+    PPG.initializeNotifications(projectId: "<your_app_id>", apiToken: "<your_api_token>, appGroupId: "<your_app_group_id>")
     
     // Register for push notifications if you do not already
     PPG.registerForNotifications(application: application, handler: { result in
@@ -117,7 +117,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         
         // Initialize PPG
-        PPG.initializeNotifications(projectId: "YOUR PROJECT ID", apiToken: "YOUR API KEY")
+        PPG.initializeNotifications(projectId: "YOUR PROJECT ID", apiToken: "YOUR API KEY", appGroupId: "YOUR APP GROUP ID")
         
         // Register for notifications
         PPG.registerForNotifications(application: application) { result in
