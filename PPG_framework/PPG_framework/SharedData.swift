@@ -9,7 +9,7 @@
 import Foundation
 import UserNotifications
 
-class SharedData {
+public class SharedData {
 
     static var shared = SharedData()
     public var appGroupId: String = ""
