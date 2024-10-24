@@ -12,60 +12,52 @@ import UserNotifications
 class SharedData {
 
     static var shared = SharedData()
-    let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
+    public var appGroupId: String = ""
+    var sharedDefaults: UserDefaults? {
+        return UserDefaults(suiteName: appGroupId)
+    }
 
     var projectId: String {
         get {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             return sharedDefaults?.string(forKey: "PPGProjectId") ?? ""
         }
         set {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGProjectId")
         }
     }
 
     var apiToken: String {
         get {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             return sharedDefaults?.string(forKey: "PPGAPIToken") ?? ""
         }
         set {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGAPIToken")
         }
     }
 
     var subscriberId: String {
         get {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
-            return sharedDefaults?.string(forKey: "PPGSubscriberId") ??
-            // Legacy supported value
-            UserDefaults.standard.string(forKey: "PPGSubscriberId") ?? ""
+            return sharedDefaults?.string(forKey: "PPGSubscriberId")
+                // Legacy supported value
+                ?? UserDefaults.standard.string(forKey: "PPGSubscriberId") ?? ""
         }
         set {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGSubscriberId")
         }
     }
 
     var deviceToken: String {
         get {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             return sharedDefaults?.string(forKey: "PPGDeviceToken") ?? ""
         }
         set {
-//            let sharedDefaults = UserDefaults(suiteName: "group.ppg.sharedDataPPG")
             sharedDefaults?.set(newValue, forKey: "PPGDeviceToken")
         }
     }
-    
+
     var eventManager: EventManager {
-        get {
-            return EventManager(sharedData: self)
-        }
+        return EventManager(sharedData: self)
     }
 
     var center: UNUserNotificationCenter!
 }
-
