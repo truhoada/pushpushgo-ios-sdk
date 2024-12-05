@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > **SPM support**
 > 
-> Version 2.1.0 provides architecture that supports SPM. At the same time, installation via Cocoapods will no longer be supported.
+> Version 2.1.0 provides architecture that supports SPM. At the same time, installation via Cocoapods from that version will no longer be supported.
 >
 > **Version 2.0.1 Breaking changes**
 >
