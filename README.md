@@ -1,6 +1,10 @@
 #  Setup Guide
 
 > [!IMPORTANT]
+> **SPM support**
+> 
+> Version 2.1.0 provides architecture that supports SPM. At the same time, installation via Cocoapods will no longer be supported.
+>
 > **Version 2.0.1 Breaking changes**
 >
 > - To be able to use v2.0.1 you will need to add AppGroups capability to your project.
@@ -12,7 +16,18 @@
 ### [ Create certificate and upload it ]
 Tutorial: https://docs.pushpushgo.company/application/providers/mobile-push/apns
 
-### [ install framework (cocoapods or direct download), remember to add pod to extension target ]
+### Install framework
+Choose one of options:
+- SPM
+- Direct download
+- Cocoapods (deprecated from v2.1.0)
+
+### Migration Cocoapods -> SPM
+1. If PPG ios-sdk was the only library installed by Pods, run `pod deintegrate` to remove any Pods-related files. If you are using Pods for any other dependencies, then remove PPG_framework refferences manually. Also detatch it from project and NSE targets.
+2. Add library using SPM. Xcode -> File -> Add Package Dependency. Provide github url and choose you project target.
+3. Manually add library to NotificationServiceExtension target.
+4. Clean and rebuild the project.
+5. If you will face any problems with derived data try running `rm -rf ~Library/Developer/Xcode/DerivedData/*` in you project directory. Then restart Xcode and clean and rebuild project.
 
 ### UIKit - Add required code to AppDelegate
 
