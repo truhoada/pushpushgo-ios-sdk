@@ -240,7 +240,8 @@ struct iOS_example_integrationApp: App {
 6. Change `didReceive` function to: (use dispatch_group here to make sure that extension returns only when delivery event is sent and notification content is updated)
 7. Click on top item in your project hierarchy and select your NotificationExtension on target list
 8. Similarly to your project, add App Group capability to your NotificationExtension and check group you want to use.
-9. In your NotificationService extension, in *didReceive* function set your app group ID.
+9. Also add PPG_framework to NotificationServiceExtension target (General tab) if you haven't done that yet.
+10. In your NotificationService extension, in *didReceive* function set your app group ID.
 
 ```swift
 override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
