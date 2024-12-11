@@ -3,7 +3,7 @@
 //  PPG_framework
 //
 //  Created by Adam Majczyk on 16/07/2020.
-//  Copyright © 2020 Goodylabs. All rights reserved.
+//  Copyright 2020 Goodylabs. All rights reserved.
 //
 
 import Foundation
@@ -13,13 +13,13 @@ protocol EventSender {
     func send(event: Event, handler: @escaping (_ result: ActionResult) -> Void)
 }
 
-class Event: Codable {
+public class Event: Codable {
 
-    var eventType: EventType
-    var timestamp: String  // ISO8601 formatted timestamp
-    var button: Int?
-    var campaign: String
-    var sentAt: Date?
+    public var eventType: EventType
+    public var timestamp: String  // ISO8601 formatted timestamp
+    public var button: Int?
+    public var campaign: String
+    public var sentAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case eventType
