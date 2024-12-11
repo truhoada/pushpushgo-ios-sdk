@@ -13,7 +13,7 @@ protocol EventSender {
     func send(event: Event, handler: @escaping (_ result: ActionResult) -> Void)
 }
 
-public class Event: Codable {
+public class Event: Codable, CustomStringConvertible {
 
     public var eventType: EventType
     public var timestamp: String  // ISO8601 formatted timestamp
@@ -55,7 +55,7 @@ public class Event: Codable {
         self.sentAt = nil
     }
 
-    required init(from decoder: Decoder) throws {
+    public required init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         eventType = try container.decode(EventType.self, forKey: .eventType)
         timestamp = try container.decode(String.self, forKey: .timestamp)
@@ -64,7 +64,7 @@ public class Event: Codable {
         sentAt = try container.decodeIfPresent(Date.self, forKey: .sentAt)
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(eventType, forKey: .eventType)
         try container.encode(timestamp, forKey: .timestamp)
@@ -73,6 +73,14 @@ public class Event: Codable {
         try container.encodeIfPresent(sentAt, forKey: .sentAt)
     }
 
+    public var description: String {
+        let buttonStr = button.map { "\($0)" } ?? "none"
+        let sentAtStr = sentAt.map { Event.iso8601DateFormatter.string(from: $0) } ?? "not sent"
+        return """
+        Event(type: \(eventType.rawValue), timestamp: \(timestamp), button: \(buttonStr), campaign: '\(campaign)', sentAt: \(sentAtStr))
+        """
+    }
+    
     func getKey() -> String {
         return "\(eventType.rawValue)_\(button ?? 0)_\(campaign)"
     }
