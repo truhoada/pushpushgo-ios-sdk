@@ -8,12 +8,28 @@
 
 import Foundation
 
+public struct EventDTO {
+    init(event: Event) {
+        self.timestamp = event.timestamp
+        self.type = event.eventType.rawValue
+        self.campaign = event.campaign
+        self.button = event.button
+        self.sentAt = event.sentAt
+    }
+    
+    var timestamp: String
+    var type: String
+    var campaign: String
+    var button: Int?
+    var sentAt: Date?
+}
+
 // Protocol defining the method for sending events.
 protocol EventSender {
     func send(event: Event, handler: @escaping (_ result: ActionResult) -> Void)
 }
 
-public class Event: Codable, CustomStringConvertible {
+class Event: Codable, CustomStringConvertible {
 
     public var eventType: EventType
     public var timestamp: String  // ISO8601 formatted timestamp
@@ -79,6 +95,10 @@ public class Event: Codable, CustomStringConvertible {
         return """
         Event(type: \(eventType.rawValue), timestamp: \(timestamp), button: \(buttonStr), campaign: '\(campaign)', sentAt: \(sentAtStr))
         """
+    }
+    
+    public func toDTO() -> EventDTO {
+        return EventDTO(event: self)
     }
     
     func getKey() -> String {

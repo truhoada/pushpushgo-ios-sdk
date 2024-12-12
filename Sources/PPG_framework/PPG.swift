@@ -183,7 +183,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         ApiService.shared.sendBeacon(beacon: beacon, handler: handler)
     }
     
-    public static func getEvents() -> [Event] {
-        return SharedData.shared.eventManager.getEvents()
+    public static func getEvents() -> [EventDTO] {
+        return SharedData.shared.eventManager.getEvents().map {$0.toDTO()}
     }
 }
