@@ -17,11 +17,11 @@ public struct EventDTO {
         self.sentAt = event.sentAt
     }
     
-    var timestamp: String
-    var type: String
-    var campaign: String
-    var button: Int?
-    var sentAt: Date?
+    public var timestamp: String
+    public var type: String
+    public var campaign: String
+    public var button: Int?
+    public var sentAt: Date?
 }
 
 // Protocol defining the method for sending events.
