@@ -1,6 +1,13 @@
 #  Setup Guide
 
 > [!IMPORTANT]
+> **Version 3.0.0 Breaking changes**
+>
+> The SDK now internally handles all notification-related functionality:
+> 1. Remove `UNUserNotificationCenterDelegate` conformance from your AppDelegate
+> 2. Remove all `userNotificationCenter` delegate method implementations
+> 3. Change `UNUserNotificationCenter.current().delegate = self` to `UNUserNotificationCenter.current().delegate = PPG.shared`
+>
 > **SPM support**
 > 
 > Version 2.1.0 provides architecture that supports SPM. At the same time, installation via Cocoapods from that version will no longer be supported.
@@ -60,65 +67,40 @@ func application(_ application: UIApplication, didFinishLaunchingWithOptions lau
         }
     })
     
-    UNUserNotificationCenter.current().delegate = self
+    UNUserNotificationCenter.current().delegate = PPG.shared
     
     return true
 }
 ```
 
-```
+```swift
 func applicationDidBecomeActive(_ application: UIApplication) {
-  // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-
-  PPG.sendEventsDataToApi()
+    // Restart any tasks that were paused (or not yet started) while the application was inactive.
+    // If the application was previously in the background, optionally refresh the user interface.
+    PPG.sendEventsDataToApi()
 }
 ```
 
-```
+```swift
 func application(_ application: UIApplication,
                  didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
     PPG.sendDeviceToken(deviceToken) { _ in }
 }
 ```
 
-```
-func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        
-// Send a delivery event to your server
+```swift
+func application(_ application: UIApplication, 
+                 didReceiveRemoteNotification userInfo: [AnyHashable: Any], 
+                 fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+    // Send a delivery event to your server
     PPG.registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { status in
-        print(status);
+        print(status)
     }
     completionHandler(.newData)
 }
 ```
 
-```swift
-func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
-          withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-    
-    // Display notification when app is in foreground, optional
-    completionHandler([.alert, .badge, .sound])
-}
-```
 
-```swift
-func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-
-    // Send information about clicked notification to framework
-    PPG.notificationClicked(response: response)
-
-    // Open external link from push notification
-    // Remove this section if this behavior is not expected
-    guard let url = PPG.getUrlFromNotificationResponse(response: response)
-        else {
-            completionHandler()
-            return
-        }
-    UIApplication.shared.open(url)
-    //
-    completionHandler()
-}
-```
 
 ### SwiftUI - Using SwiftUI you will still have to add AppDelegate
 Create AppDelegate.swift file
@@ -128,7 +110,7 @@ import UIKit
 import UserNotifications
 import PPG_framework
 
-class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         
         // Initialize PPG
@@ -146,15 +128,15 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             }
         }
         
-        UNUserNotificationCenter.current().delegate = self
+        UNUserNotificationCenter.current().delegate = PPG.shared
         
         return true
     }
     
     func applicationDidBecomeActive(_ application: UIApplication) {
-      // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-
-      PPG.sendEventsDataToApi()
+        // Restart any tasks that were paused (or not yet started) while the application was inactive.
+        // If the application was previously in the background, optionally refresh the user interface.
+        PPG.sendEventsDataToApi()
     }
     
     func application(_ application: UIApplication,
@@ -162,37 +144,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         PPG.sendDeviceToken(deviceToken) { _ in }
     }
 
-    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        
+    func application(_ application: UIApplication, 
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any], 
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         // Send a delivery event to your server
         PPG.registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { status in
-            print(status);
+            print(status)
         }
         completionHandler(.newData)
-    }
-    
-    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
-              withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        
-        // Display notification when app is in foreground, optional
-        completionHandler([.banner, .badge, .sound])
-    }
-    
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-
-        // Send information about clicked notification to framework
-        PPG.notificationClicked(response: response)
-
-        // Open external link from push notification
-        // Remove this section if this behavior is not expected
-        guard let url = PPG.getUrlFromNotificationResponse(response: response)
-            else {
-                completionHandler()
-                return
-            }
-        UIApplication.shared.open(url)
-        //
-        completionHandler()
     }
 }
 ```
@@ -303,17 +262,46 @@ beacon.send() { result in }
 ### Unsubscribe user
 `PPG.unsubscribeUser { result in ... }`
 
-### Send Event
-Event's purpose is to tell API about newly received notifications. 
-You should send events every time when user:
+### Handling Notifications and Events
 
-1. Received notification in extension
-`PPG.notificationDelivered(notificationRequest: UNNotificationRequest, handler: @escaping (_ result: ActionResult)`
+#### Event Tracking
+The SDK automatically tracks various notification events:
 
-2. Click on notification
-`PPG.notificationClicked(response: UNNotificationResponse)`
+1. **Notification Delivery**
+```swift
+// In NotificationServiceExtension
+PPG.notificationDelivered(notificationRequest: request) { _ in
+    // Handle completion
+}
 
-2. Click button inside notification
-`PPG.notificationButtonClicked(response: response, button: 1)`
+// Or in AppDelegate
+PPG.registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { status in
+    // Handle completion
+}
+```
 
-Available values for `button` are `1` and `2`
+2. **Notification Clicks**
+The SDK automatically tracks notification clicks and handles URL redirections internally. No additional code is required in your AppDelegate.
+
+#### Interactive Notifications
+The SDK supports interactive notifications with action buttons. Actions are configured through the notification payload and automatically managed by the SDK:
+
+- Buttons are created dynamically based on the payload
+- Duplicate button titles are handled automatically
+- Categories expire after 7 days
+- URLs can be associated with specific buttons
+
+Button identifiers:
+- `button_1`: First action button
+- `button_2`: Second action button
+
+Supported button options:
+- `foreground`: Opens the app
+- `destructive`: Red button style
+- `authenticationRequired`: Requires device unlock
+
+The SDK automatically manages:
+- Category creation and registration
+- Button title uniqueness
+- Action handling and URL redirection
+- Event tracking for button clicks
