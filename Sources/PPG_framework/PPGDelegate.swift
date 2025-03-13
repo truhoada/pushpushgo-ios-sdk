@@ -15,7 +15,7 @@ open class PPGAppDelegate: NSObject, UIApplicationDelegate {
     }
     
     open func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        PPG.sendDeviceToken(deviceToken) { _ in }
+        PPG.sendDeviceToken(deviceToken) { _,_  in }
     }
     
     open func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable : Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
@@ -36,7 +36,7 @@ public extension UIApplicationDelegate {
     }
     
     func PPGdidRegisterForRemoteNotificationsWithDeviceToken(_ deviceToken: Data) {
-        PPG.sendDeviceToken(deviceToken) { _ in }
+        PPG.sendDeviceToken(deviceToken) { _,_  in }
     }
     
     func PPGdidReceiveRemoteNotification(_ userInfo: [AnyHashable : Any], completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
