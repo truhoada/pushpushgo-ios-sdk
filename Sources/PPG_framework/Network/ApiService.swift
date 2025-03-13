@@ -13,11 +13,11 @@ class ApiService {
 
     let baseUrl = "https://api.pushpushgo.com"
 
-    func subscribeUser(token: String, handler: @escaping (_ result: ActionResult) -> Void) {
+    func subscribeUser(token: String, handler: @escaping (_ result: ActionResult, _ subscriberId: String?) -> Void) {
         guard let encoded = try? JSONEncoder().encode(["token": token]) else {
             let log = "Failed to encode token"
             print(log)
-            handler(.error(log))
+            handler(.error(log), nil)
             return
         }
         let projectId = SharedData.shared.projectId
@@ -33,17 +33,18 @@ class ApiService {
             guard let data = data else {
                 let log = "No data in response: \(error?.localizedDescription ?? "Unknown error")."
                 print(log)
-                handler(.error(log))
+                handler(.error(log), nil)
                 return
             }
 
             if let decodedData = try? JSONDecoder().decode(SubscribeUserResponse.self, from: data) {
                 SharedData.shared.subscriberId = decodedData._id
-                handler(.success)
+                UserDefaults.standard.set(decodedData._id, forKey: "PPGSubscriberId")
+                handler(.success, decodedData._id)
             } else {
                 let log = "Invalid response from server"
                 print("❌ PPG SDK: \(log)")
-                handler(.error(log))
+                handler(.error(log), nil)
             }
         }.resume()
     }

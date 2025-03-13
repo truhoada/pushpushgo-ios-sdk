@@ -13,6 +13,7 @@ import UserNotifications
 // Global bridge instance - initialized when PPG is first used
 private let subscriptionBridge = PushPushGoSubscriptionBridgeManager()
 
+@objcMembers
 public class PPG: NSObject, UNUserNotificationCenterDelegate {
 
     // Shared instance of PPG for handling notification delegate methods
@@ -36,7 +37,7 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         guard !apiToken.isEmpty else {
             fatalError("PPG SDK: apiToken cannot be empty")
         }
-        
+
         // Initialize bridge for In-App Messages communication
         _ = subscriptionBridge // Force initialization
         SharedData.shared.appGroupId = appGroupId
@@ -56,6 +57,19 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         SharedData.shared.isSubscribed = hasDeviceToken
     }
 
+    /// Using for Objective C project
+    public static func registerForNotificationsObjc(application: UIApplication, onSuccess: @escaping() -> Void, onFailure: @escaping(String?) -> Void) {
+        registerForNotifications(application: application) { result in
+            switch result {
+            case .success:
+                onSuccess()
+            case .error(let error):
+                onFailure(error)
+            }
+        }
+    }
+
+    /// Using for Swift project
     public static func registerForNotifications(
         application: UIApplication,
         handler: @escaping (_ result: ActionResult) -> Void
@@ -101,22 +115,34 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         SharedData.shared.apiToken = apiToken
     }
 
-    public static func sendDeviceToken(
-        _ token: Data, handler: @escaping (_ result: ActionResult) -> Void
-    ) {
+    /// Using for Objective C project
+    public static func sendDeviceTokenObjC(_ token: Data, onSuccess: @escaping(_ subscriberId: String?) -> Void, onFailure: @escaping(String?) -> Void) {
+        sendDeviceToken(token) { result, subscriberId in
+            switch result {
+            case .success:
+                onSuccess(subscriberId)
+            case .error(let error):
+                onFailure(error)
+            }
+        }
+    }
+
+    /// Using for Swift project
+    public static func sendDeviceToken(_ token: Data, handler: @escaping (_ result: ActionResult, _ subscriberId: String?) -> Void) {
         let tokenParts = token.map { data in String(format: "%02.2hhx", data) }
         let key = tokenParts.joined()
         let oldKey = SharedData.shared.deviceToken
+        let subId = SharedData.shared.subscriberId
 
         print("Device token \(key)")
 
         if oldKey == key {
             // Token already registered
-            handler(.success)
+            handler(.success, subId)
             return
         }
 
-        ApiService.shared.subscribeUser(token: key) { result in
+        ApiService.shared.subscribeUser(token: key) { result, subscriberId in
             if case .success = result {
                 SharedData.shared.deviceToken = key
                 // Successfully subscribed - update status
@@ -126,20 +152,31 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
                 SharedData.shared.updateSubscriptionStatus(isSubscribed: false)
             }
 
-            handler(result)
+            handler(result, subscriberId)
         }
     }
 
-    public static func resendDeviceToken(
-        handler: @escaping (_ result: ActionResult) -> Void
-    ) {
+    /// Using for Objective C project
+    public static func resendDeviceTokenObjC(onSuccess: @escaping() -> Void, onFailure: @escaping(String?) -> Void) {
+        resendDeviceToken { result in
+            switch result {
+            case .success:
+                onSuccess()
+            case .error(let error):
+                onFailure(error)
+            }
+        }
+    }
+
+    /// Using for Swift project
+    public static func resendDeviceToken(handler: @escaping (_ result: ActionResult) -> Void) {
         let token = SharedData.shared.deviceToken
         if token == "" {
             handler(.error("Token is not available"))
             return
         }
 
-        ApiService.shared.subscribeUser(token: token) { result in
+        ApiService.shared.subscribeUser(token: token) { result, subscriberId in
             if case .success = result {
                 // Successfully re-subscribed - update status
                 SharedData.shared.updateSubscriptionStatus(isSubscribed: true)
@@ -151,9 +188,20 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    public static func unsubscribeUser(
-        handler: @escaping (_ result: ActionResult) -> Void
-    ) {
+    /// Using for Objective C project
+    public static func unsubscribeUserObjC(onSuccess: @escaping() -> Void, onFailure: @escaping(String?) -> Void) {
+        unsubscribeUser { result in
+            switch result {
+            case .success:
+                onSuccess()
+            case .error(let error):
+                onFailure(error)
+            }
+        }
+    }
+
+    /// Using for Swift project
+    public static func unsubscribeUser(handler: @escaping (_ result: ActionResult) -> Void) {
         ApiService.shared.unsubscribeUser { result in
             if case .success = result {
                 // Clear all subscriber data
@@ -164,6 +212,23 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    /// Using for Objective C project
+    /// Mark given notification as delivered to the user
+    /// This should be called in your NotificationServiceExtension
+    ///
+    /// - Parameter notificationRequest: UNNotificationRequest
+    public static func notificationDeliveredObjC(notificationRequest: UNNotificationRequest, onSuccess: @escaping() -> Void, onFailure: @escaping(String?) -> Void) {
+        notificationDelivered(notificationRequest: notificationRequest) { result in
+            switch result {
+            case .success:
+                onSuccess()
+            case .error(let error):
+                onFailure(error)
+            }
+        }
+    }
+
+    /// Using for Swift project
     /// Mark given notification as delivered to the user
     /// This should be called in your NotificationServiceExtension
     ///
@@ -176,6 +241,20 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
             notificationRequest: notificationRequest, handler: handler)
     }
 
+    /// Using for Objective C project
+    @objc public static func registerNotificationDeliveredFromUserInfoObjc(
+        userInfo: [AnyHashable: Any], onSuccess: @escaping() -> Void, onFailure: @escaping(String?) -> Void) {
+            registerNotificationDeliveredFromUserInfo(userInfo: userInfo) { result in
+                switch result {
+                case .success:
+                    onSuccess()
+                case .error(let error):
+                    onFailure(error)
+                }
+            }
+    }
+    
+    /// Using for Swift project
     public static func registerNotificationDeliveredFromUserInfo(
         userInfo: [AnyHashable: Any],
         handler: @escaping (_ result: ActionResult) -> Void
