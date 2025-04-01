@@ -1,0 +1,5 @@
+
+
+https://github.com/ppgco/ios-sdk
+
+git@github.com:truhoada/pushpushgo-ios-sdk.git
