@@ -10,6 +10,7 @@ let package = Package(
         // Push Notifications SDK
         .library(
             name: "PPG_framework",
+            type: .dynamic, // ✅ Make it a dynamic library
             targets: ["PPG_framework"]),
         // In-App Messages SDK
         .library(
