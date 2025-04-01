@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(
             name: "PPG_framework",
+            type: .dynamic, // ✅ Make it a dynamic library
             targets: ["PPG_framework"]),
     ],
     dependencies: [
