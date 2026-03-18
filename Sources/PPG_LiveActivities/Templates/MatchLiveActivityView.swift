@@ -1,0 +1,194 @@
+//
+//  MatchLiveActivityView.swift
+//  PPG_LiveActivities
+//
+//  Created by PushPushGo on 13/03/2026.
+//
+
+import SwiftUI
+import WidgetKit
+import ActivityKit
+
+/// Pre-built Lock Screen view for the football match Live Activity template.
+///
+/// Usage in your Widget Extension:
+/// ```swift
+/// struct MatchLiveActivity: Widget {
+///     var body: some WidgetConfiguration {
+///         ActivityConfiguration(for: MatchActivityAttributes.self) { context in
+///             PPGMatchLockScreenView(context: context)
+///         } dynamicIsland: { context in
+///             PPGMatchDynamicIsland(context: context)
+///         }
+///     }
+/// }
+/// ```
+@available(iOS 16.2, *)
+public struct PPGMatchLockScreenView: View {
+    
+    let context: ActivityViewContext<MatchActivityAttributes>
+    
+    public init(context: ActivityViewContext<MatchActivityAttributes>) {
+        self.context = context
+    }
+    
+    private var phase: MatchPhase? {
+        return MatchPhase(rawValue: context.state.matchPhase)
+    }
+    
+    public var body: some View {
+        HStack(spacing: 0) {
+            // Home team
+            teamView(
+                name: context.attributes.homeTeamName,
+                badgeUrl: context.attributes.homeTeamBadgeUrl,
+                score: context.state.homeScore,
+                alignment: .trailing
+            )
+            
+            // Center: score + phase
+            centerView
+            
+            // Away team
+            teamView(
+                name: context.attributes.awayTeamName,
+                badgeUrl: context.attributes.awayTeamBadgeUrl,
+                score: context.state.awayScore,
+                alignment: .leading
+            )
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .activityBackgroundTint(Color.black.opacity(0.85))
+        .activitySystemActionForegroundColor(.white)
+    }
+    
+    // Team View
+    
+    private func teamView(
+        name: String,
+        badgeUrl: String?,
+        score: Int,
+        alignment: HorizontalAlignment
+    ) -> some View {
+        VStack(alignment: alignment, spacing: 4) {
+            // Badge
+            if let badgeUrl = badgeUrl, let url = URL(string: badgeUrl) {
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } placeholder: {
+                    teamBadgePlaceholder
+                }
+                .frame(width: 36, height: 36)
+            } else {
+                teamBadgePlaceholder
+            }
+            
+            // Team name
+            Text(name)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundColor(.white.opacity(0.8))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(minWidth: 60)
+    }
+    
+    private var teamBadgePlaceholder: some View {
+        Circle()
+            .fill(Color.white.opacity(0.2))
+            .frame(width: 36, height: 36)
+            .overlay(
+                Image(systemName: "shield.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white.opacity(0.5))
+            )
+    }
+    
+    // Center View
+    
+    private var centerView: some View {
+        VStack(spacing: 4) {
+            // Score
+            Text(context.state.scoreDisplay)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .monospacedDigit()
+            
+            // Phase + Minute
+            HStack(spacing: 4) {
+                if let phase = phase {
+                    if phase.isPlaying {
+                        // Show pulsing dot for live match
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        
+                        Text("\(context.state.matchMinute)'")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.green)
+                    }
+                    
+                    Text(phase.displayText)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(phaseColor)
+                }
+            }
+            
+            // Countdown timer for pre-match
+            if let phase = phase, phase == .preMatch,
+               let startDate = context.state.startDate {
+                Text(startDate, style: .timer)
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.6))
+                    .multilineTextAlignment(.center)
+            }
+            
+            // CTA button
+            if let ctaText = context.attributes.ctaText,
+               !ctaText.isEmpty {
+                if let ctaDeepLink = context.attributes.ctaDeepLink,
+                   let url = URL(string: ctaDeepLink) {
+                    Link(destination: url) {
+                        ctaButton(text: ctaText)
+                    }
+                } else if let deepLink = context.attributes.deepLink,
+                          let url = URL(string: deepLink) {
+                    Link(destination: url) {
+                        ctaButton(text: ctaText)
+                    }
+                } else {
+                    ctaButton(text: ctaText)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    private func ctaButton(text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(Color.blue.opacity(0.6))
+            .cornerRadius(12)
+    }
+    
+    // Phase Color
+    
+    private var phaseColor: Color {
+        guard let phase = phase else { return .white.opacity(0.6) }
+        
+        if phase.isPlaying { return .green }
+        if phase.isBreak { return .yellow }
+        if phase.isFinished { return .white.opacity(0.6) }
+        return .white.opacity(0.8)
+    }
+}
