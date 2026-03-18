@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import ActivityKit
 
 /// Configuration for the Live Activities SDK
 @available(iOS 16.2, *)
@@ -44,6 +45,14 @@ public enum LiveActivityDismissPolicy: Sendable {
     case after(Date)
     /// Use system default (up to 4 hours on Lock Screen)
     case `default`
+    
+    func toSystemPolicy() -> ActivityUIDismissalPolicy {
+        switch self {
+        case .immediate: return .immediate
+        case .after(let date): return .after(date)
+        case .default: return .default
+        }
+    }
 }
 
 /// Information about an active Live Activity

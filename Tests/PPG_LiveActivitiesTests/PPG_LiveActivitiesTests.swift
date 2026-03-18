@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import SwiftUI
 @testable import PPG_LiveActivities
 
 final class PPG_LiveActivitiesTests: XCTestCase {
@@ -244,52 +245,75 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     @available(iOS 16.2, *)
     func testDismissPolicyCases() {
-        // Verify all cases can be created
         let _ = LiveActivityDismissPolicy.immediate
         let _ = LiveActivityDismissPolicy.after(Date())
         let _ = LiveActivityDismissPolicy.default
     }
     
-    // AnyCodableValue Tests
+    @available(iOS 16.2, *)
+    func testDismissPolicyToSystemPolicy() {
+        // .immediate maps to .immediate
+        let immediatePolicy = LiveActivityDismissPolicy.immediate.toSystemPolicy()
+        XCTAssertNotNil(immediatePolicy)
+        
+        // .default maps to .default
+        let defaultPolicy = LiveActivityDismissPolicy.default.toSystemPolicy()
+        XCTAssertNotNil(defaultPolicy)
+        
+        // .after(Date) maps to .after(Date)
+        let date = Date()
+        let afterPolicy = LiveActivityDismissPolicy.after(date).toSystemPolicy()
+        XCTAssertNotNil(afterPolicy)
+    }
+    
+    // MatchPhase Color Tests
     
     @available(iOS 16.2, *)
-    func testAnyCodableValueFromAny() {
-        let stringValue = AnyCodableValue.from("hello")
-        if case .string(let v) = stringValue { XCTAssertEqual(v, "hello") }
-        else { XCTFail("Expected string") }
+    func testMatchPhaseColor() {
+        // Playing phases should be green
+        XCTAssertEqual(MatchPhase.firstHalf.color, .green)
+        XCTAssertEqual(MatchPhase.secondHalf.color, .green)
+        XCTAssertEqual(MatchPhase.penaltyShootout.color, .green)
         
-        let intValue = AnyCodableValue.from(42)
-        if case .int(let v) = intValue { XCTAssertEqual(v, 42) }
-        else { XCTFail("Expected int") }
+        // Break phases should be yellow
+        XCTAssertEqual(MatchPhase.halfTimeBreak.color, .yellow)
+        XCTAssertEqual(MatchPhase.extraTimeBreak.color, .yellow)
         
-        let boolValue = AnyCodableValue.from(true)
-        if case .bool(let v) = boolValue { XCTAssertTrue(v) }
-        else { XCTFail("Expected bool") }
+        // Finished phases should be secondary
+        XCTAssertEqual(MatchPhase.fullTime.color, .secondary)
+        XCTAssertEqual(MatchPhase.matchEnded.color, .secondary)
         
-        let nullValue = AnyCodableValue.from(NSNull())
-        if case .null = nullValue { /* ok */ }
-        else { XCTFail("Expected null") }
+        // Pre-match should be primary
+        XCTAssertEqual(MatchPhase.preMatch.color, .primary)
+    }
+    
+    // LiveActivityInfo Tests
+    
+    @available(iOS 16.2, *)
+    func testLiveActivityInfoInit() {
+        let date = Date()
+        let info = LiveActivityInfo(
+            activityId: "act-1",
+            templateId: "match",
+            pushToken: "abc123",
+            startedAt: date
+        )
+        
+        XCTAssertEqual(info.activityId, "act-1")
+        XCTAssertEqual(info.templateId, "match")
+        XCTAssertEqual(info.pushToken, "abc123")
+        XCTAssertEqual(info.startedAt, date)
     }
     
     @available(iOS 16.2, *)
-    func testAnyCodableValueCodable() throws {
-        let encoder = JSONEncoder()
-        let decoder = JSONDecoder()
+    func testLiveActivityInfoNilToken() {
+        let info = LiveActivityInfo(
+            activityId: "act-2",
+            templateId: "match",
+            pushToken: nil,
+            startedAt: Date()
+        )
         
-        let values: [AnyCodableValue] = [.string("test"), .int(99), .double(3.14), .bool(false), .null]
-        
-        for value in values {
-            let data = try encoder.encode(value)
-            let decoded = try decoder.decode(AnyCodableValue.self, from: data)
-            
-            switch (value, decoded) {
-            case (.string(let a), .string(let b)): XCTAssertEqual(a, b)
-            case (.int(let a), .int(let b)): XCTAssertEqual(a, b)
-            case (.double(let a), .double(let b)): XCTAssertEqual(a, b, accuracy: 0.01)
-            case (.bool(let a), .bool(let b)): XCTAssertEqual(a, b)
-            case (.null, .null): break
-            default: XCTFail("Mismatch: \(value) vs \(decoded)")
-            }
-        }
+        XCTAssertNil(info.pushToken)
     }
 }

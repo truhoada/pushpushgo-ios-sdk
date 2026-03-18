@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 /// Represents all possible phases of a football match
 @available(iOS 16.2, *)
@@ -126,5 +127,13 @@ public enum MatchPhase: String, Codable, CaseIterable, Sendable {
         case .penaltyShootout: return "PEN"
         case .matchEnded: return "END"
         }
+    }
+    
+    /// Color representing the current phase state for UI display
+    public var color: Color {
+        if isPlaying { return .green }
+        if isBreak { return .yellow }
+        if isFinished { return .secondary }
+        return .primary
     }
 }

@@ -7,60 +7,71 @@
 
 import Foundation
 
-/// Repository for Live Activity API communication with PPG backend
+/// Repository for Live Activity API communication with PPG backend.
+/// All network calls go through `performRequest` to avoid code duplication.
 @available(iOS 16.2, *)
 internal class LiveActivityRepository {
     
-    // Properties
-    
     private let apiKey: String
     private let projectId: String
-    private let isProduction: Bool
+    private let baseURL: String
     private let session: URLSession
-    
-    private var baseURL: String {
-        return isProduction ? "https://api.pushpushgo.com" : "https://api.master1.qappg.co"
-    }
-    
-    // Subscriber ID bridge — reads from PPG_framework's UserDefaults without direct dependency
-    private var subscriberId: String? {
-        let id = UserDefaults.standard.string(forKey: "PPGSubscriberId") ?? ""
-        return id.isEmpty ? nil : id
-    }
-    
-    // Initialization
     
     init(apiKey: String, projectId: String, isProduction: Bool = true) {
         self.apiKey = apiKey
         self.projectId = projectId
-        self.isProduction = isProduction
+        self.baseURL = isProduction ? "https://api.pushpushgo.com" : "https://api.master1.qappg.co"
         self.session = URLSession.shared
     }
     
-    // Push Token Registration
-    
-    /// Register an ActivityKit push token with the PPG backend
-    /// This allows the backend to send push-to-update payloads to the Live Activity
+    /// Register an ActivityKit push token with the PPG backend.
     func registerPushToken(
         activityId: String,
         templateId: String,
         pushToken: String,
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
-        let requestBody = RegisterPushTokenRequest(
+        let body = RegisterPushTokenRequest(
             activityId: activityId,
             templateId: templateId,
             pushToken: pushToken,
-            subscriberId: subscriberId
+            subscriberId: PushSDKBridge.subscriberId
         )
-        
-        guard let encoded = try? JSONEncoder().encode(requestBody) else {
+        performRequest(path: "live-activity/register", body: body, completion: completion)
+    }
+    
+    /// Track a Live Activity event.
+    func trackEvent(
+        eventType: LiveActivityEventType,
+        activityId: String,
+        templateId: String,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let body = LiveActivityEventRequest(
+            type: eventType.rawValue,
+            payload: LiveActivityEventPayload(
+                activityId: activityId,
+                templateId: templateId,
+                timestamp: ISO8601DateFormatter().string(from: Date()),
+                subscriberId: PushSDKBridge.subscriberId
+            )
+        )
+        performRequest(path: "live-activity/event", body: body, completion: completion)
+    }
+    
+    // Shared HTTP logic (DRY)
+    
+    private func performRequest<T: Encodable>(
+        path: String,
+        body: T,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        guard let encoded = try? JSONEncoder().encode(body) else {
             completion(.failure(LiveActivityError.encodingFailed))
             return
         }
         
-        let endpoint = "\(baseURL)/v1/ios/\(projectId)/live-activity/register"
-        guard let url = URL(string: endpoint) else {
+        guard let url = URL(string: "\(baseURL)/v1/ios/\(projectId)/\(path)") else {
             completion(.failure(LiveActivityError.invalidURL))
             return
         }
@@ -71,7 +82,7 @@ internal class LiveActivityRepository {
         request.setValue(apiKey, forHTTPHeaderField: "X-Token")
         request.httpBody = encoded
         
-        session.dataTask(with: request) { data, response, error in
+        session.dataTask(with: request) { _, response, error in
             if let error = error {
                 completion(.failure(error))
                 return
@@ -79,87 +90,12 @@ internal class LiveActivityRepository {
             
             guard let httpResponse = response as? HTTPURLResponse,
                   (200...299).contains(httpResponse.statusCode) else {
-                completion(.failure(LiveActivityError.serverError(
-                    (response as? HTTPURLResponse)?.statusCode ?? -1
-                )))
+                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+                completion(.failure(LiveActivityError.serverError(code)))
                 return
             }
             
             completion(.success(()))
         }.resume()
-    }
-    
-    // Event Tracking
-    
-    /// Track a Live Activity event (started, updated, clicked, ended, dismissed)
-    func trackEvent(
-        eventType: LiveActivityEventType,
-        activityId: String,
-        templateId: String,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        let timestamp = ISO8601DateFormatter().string(from: Date())
-        
-        let requestBody = LiveActivityEventRequest(
-            type: eventType.rawValue,
-            payload: LiveActivityEventPayload(
-                activityId: activityId,
-                templateId: templateId,
-                timestamp: timestamp,
-                subscriberId: subscriberId
-            )
-        )
-        
-        guard let encoded = try? JSONEncoder().encode(requestBody) else {
-            completion(.failure(LiveActivityError.encodingFailed))
-            return
-        }
-        
-        let endpoint = "\(baseURL)/v1/ios/\(projectId)/live-activity/event"
-        guard let url = URL(string: endpoint) else {
-            completion(.failure(LiveActivityError.invalidURL))
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(apiKey, forHTTPHeaderField: "X-Token")
-        request.httpBody = encoded
-        
-        session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            
-            completion(.success(()))
-        }.resume()
-    }
-}
-
-// Error Types
-
-@available(iOS 16.2, *)
-internal enum LiveActivityError: LocalizedError {
-    case encodingFailed
-    case invalidURL
-    case serverError(Int)
-    case activityNotFound
-    case activitiesNotEnabled
-    
-    var errorDescription: String? {
-        switch self {
-        case .encodingFailed:
-            return "Failed to encode request body"
-        case .invalidURL:
-            return "Invalid API URL"
-        case .serverError(let code):
-            return "Server error: HTTP \(code)"
-        case .activityNotFound:
-            return "Activity not found"
-        case .activitiesNotEnabled:
-            return "Live Activities are not enabled on this device"
-        }
     }
 }

@@ -136,7 +136,7 @@ public struct PPGMatchLockScreenView: View {
                     Text(phase.displayText)
                         .font(.caption)
                         .fontWeight(.medium)
-                        .foregroundColor(phaseColor)
+                        .foregroundColor(phase.color)
                 }
             }
             
@@ -181,14 +181,4 @@ public struct PPGMatchLockScreenView: View {
             .cornerRadius(12)
     }
     
-    // Phase Color
-    
-    private var phaseColor: Color {
-        guard let phase = phase else { return .white.opacity(0.6) }
-        
-        if phase.isPlaying { return .green }
-        if phase.isBreak { return .yellow }
-        if phase.isFinished { return .white.opacity(0.6) }
-        return .white.opacity(0.8)
-    }
 }

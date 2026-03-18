@@ -76,7 +76,6 @@ struct MatchLiveActivityWidget: Widget {
 ### Step 4: Start a Match Activity
 
 ```swift
-// Create match attributes (static data)
 let attributes = MatchActivityAttributes(
     matchId: "match-2026-final",
     homeTeamName: "Brazil",
@@ -88,7 +87,6 @@ let attributes = MatchActivityAttributes(
     ctaDeepLink: "myapp://match/2026-final/stats"
 )
 
-// Create initial state (dynamic data)
 let initialState = MatchActivityAttributes.ContentState(
     homeScore: 0,
     awayScore: 0,
@@ -96,18 +94,19 @@ let initialState = MatchActivityAttributes.ContentState(
     matchMinute: "0"
 )
 
-// Start the activity
-let activityId = LiveActivitiesSDK.shared.startMatchActivity(
+// Start — the generic API works with any ActivityAttributes type
+let activityId = LiveActivitiesSDK.shared.startActivity(
     attributes: attributes,
-    initialState: initialState
+    initialState: initialState,
+    templateId: "match"
 )
 ```
 
 ### Step 5: Update During the Match
 
 ```swift
-// Goal scored!
-LiveActivitiesSDK.shared.updateMatchActivity(
+LiveActivitiesSDK.shared.updateActivity(
+    MatchActivityAttributes.self,
     activityId: activityId!,
     state: MatchActivityAttributes.ContentState(
         homeScore: 1,
@@ -121,7 +120,8 @@ LiveActivitiesSDK.shared.updateMatchActivity(
 ### Step 6: End the Match
 
 ```swift
-LiveActivitiesSDK.shared.endMatchActivity(
+LiveActivitiesSDK.shared.endActivity(
+    MatchActivityAttributes.self,
     activityId: activityId!,
     finalState: MatchActivityAttributes.ContentState(
         homeScore: 2,
@@ -133,40 +133,47 @@ LiveActivitiesSDK.shared.endMatchActivity(
 )
 ```
 
-## Generic API
+## Adding a New Template
 
-For future templates or custom use cases, use the generic dictionary-based API:
+All lifecycle methods are generic — they work with **any** `ActivityAttributes` type.
+Adding a new template requires **zero changes** to the SDK core:
+
+1. Define your `ActivityAttributes`:
+```swift
+struct DeliveryActivityAttributes: ActivityAttributes {
+    let orderId: String
+    let restaurantName: String
+    
+    struct ContentState: Codable, Hashable {
+        let status: String
+        let estimatedArrival: Date
+    }
+}
+```
+
+2. Create SwiftUI views for Lock Screen and Dynamic Island
+3. Register in your Widget Extension via `ActivityConfiguration(for: DeliveryActivityAttributes.self)`
+4. Use the same SDK methods — generics handle everything:
 
 ```swift
-// Start any activity
 let id = LiveActivitiesSDK.shared.startActivity(
-    templateId: "match",
-    attributes: [
-        "matchId": "match-123",
-        "homeTeamName": "Team A",
-        "awayTeamName": "Team B"
-    ],
-    initialState: [
-        "homeScore": 0,
-        "awayScore": 0,
-        "matchPhase": "PRE_MATCH",
-        "matchMinute": "0"
-    ]
+    attributes: DeliveryActivityAttributes(orderId: "456", restaurantName: "Pizza Place"),
+    initialState: .init(status: "preparing", estimatedArrival: Date().addingTimeInterval(1800)),
+    templateId: "delivery"
 )
 
-// Update any activity
 LiveActivitiesSDK.shared.updateActivity(
+    DeliveryActivityAttributes.self,
     activityId: id!,
-    state: [
-        "homeScore": 1,
-        "awayScore": 0,
-        "matchPhase": "FIRST_HALF",
-        "matchMinute": "23"
-    ]
+    state: .init(status: "on_the_way", estimatedArrival: Date().addingTimeInterval(900))
 )
 
-// End any activity
-LiveActivitiesSDK.shared.endActivity(activityId: id!)
+LiveActivitiesSDK.shared.endActivity(
+    DeliveryActivityAttributes.self,
+    activityId: id!,
+    finalState: .init(status: "delivered", estimatedArrival: Date()),
+    dismissPolicy: .after(Date().addingTimeInterval(300))
+)
 ```
 
 ## Match Phases
@@ -186,27 +193,6 @@ The SDK provides a complete `MatchPhase` enum with all football match states:
 | `EXTRA_TIME_SECOND_HALF` | ET 2nd Half | Playing |
 | `PENALTY_SHOOTOUT` | Penalties | Playing |
 | `MATCH_ENDED` | Match Ended | Finished |
-
-## Custom Templates
-
-To create your own template (e.g., delivery tracking):
-
-1. Define your `ActivityAttributes`:
-```swift
-struct DeliveryActivityAttributes: ActivityAttributes {
-    let orderId: String
-    let restaurantName: String
-    
-    struct ContentState: Codable, Hashable {
-        let status: String
-        let estimatedArrival: Date
-    }
-}
-```
-
-2. Create SwiftUI views for Lock Screen and Dynamic Island
-3. Register in your Widget Extension
-4. Use the generic API to start/update/end
 
 ## Push-to-Update
 
@@ -264,18 +250,13 @@ initialize(apiKey: String, projectId: String, isProduction: Bool, isDebug: Bool)
 // Check availability
 areActivitiesEnabled() -> Bool
 
-// Match template (type-safe)
-startMatchActivity(attributes:, initialState:) -> String?
-updateMatchActivity(activityId:, state:)
-endMatchActivity(activityId:, finalState:, dismissPolicy:)
-
-// Generic (any template)
-startActivity(templateId:, attributes:, initialState:) -> String?
-updateActivity(activityId:, state:)
-endActivity(activityId:, finalState:, dismissPolicy:)
+// Lifecycle — fully generic, works with any ActivityAttributes type
+startActivity<T>(attributes: T, initialState: T.ContentState, templateId: String) -> String?
+updateActivity<T>(_ type: T.Type, activityId: String, state: T.ContentState)
+endActivity<T>(_ type: T.Type, activityId: String, finalState: T.ContentState?, dismissPolicy:)
 
 // Management
-endAllActivities()
+endAllActivities<T>(ofType: T.Type)
 getActiveActivities() -> [LiveActivityInfo]
 ```
 

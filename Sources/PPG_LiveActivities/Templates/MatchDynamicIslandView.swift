@@ -127,7 +127,7 @@ public struct PPGMatchDynamicIsland {
                     Text(phase.displayText)
                         .font(.caption2)
                         .fontWeight(.medium)
-                        .foregroundColor(phaseColor)
+                        .foregroundColor(phase.color)
                 }
             }
         }
@@ -193,8 +193,6 @@ public struct PPGMatchDynamicIsland {
             .monospacedDigit()
     }
     
-    // Helpers
-    
     private func teamBadge(url: String?, size: CGFloat) -> some View {
         Group {
             if let badgeUrl = url, let imageUrl = URL(string: badgeUrl) {
@@ -214,14 +212,5 @@ public struct PPGMatchDynamicIsland {
                     .foregroundColor(.secondary)
             }
         }
-    }
-    
-    private var phaseColor: Color {
-        guard let phase = phase else { return .secondary }
-        
-        if phase.isPlaying { return .green }
-        if phase.isBreak { return .yellow }
-        if phase.isFinished { return .secondary }
-        return .primary
     }
 }
