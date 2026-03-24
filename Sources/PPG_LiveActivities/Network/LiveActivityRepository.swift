@@ -9,7 +9,7 @@ import Foundation
 
 /// Repository for Live Activity API communication with PPG backend.
 /// All network calls go through `performRequest` to avoid code duplication.
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 internal class LiveActivityRepository {
     
     private let apiKey: String
@@ -59,21 +59,21 @@ internal class LiveActivityRepository {
         performRequest(path: "live-activity/event", body: body, completion: completion)
     }
     
+    /// Register as observer for a campaign (push-to-start flow).
+    @available(iOS 17.2, *)
+    func registerObserver(body: ObserveRequest) async throws -> ObserveResponse {
+        return try await performDecodableRequest(path: "live-activity/observe", body: body)
+    }
+    
     // Shared HTTP logic (DRY)
     
-    private func performRequest<T: Encodable>(
-        path: String,
-        body: T,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        guard let encoded = try? JSONEncoder().encode(body) else {
-            completion(.failure(LiveActivityError.encodingFailed))
-            return
+    private func buildRequest<T: Encodable>(path: String, body: T) throws -> URLRequest {
+        guard let url = URL(string: "\(baseURL)/v1/ios/\(projectId)/\(path)") else {
+            throw LiveActivityError.invalidURL
         }
         
-        guard let url = URL(string: "\(baseURL)/v1/ios/\(projectId)/\(path)") else {
-            completion(.failure(LiveActivityError.invalidURL))
-            return
+        guard let encoded = try? JSONEncoder().encode(body) else {
+            throw LiveActivityError.encodingFailed
         }
         
         var request = URLRequest(url: url)
@@ -81,6 +81,21 @@ internal class LiveActivityRepository {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "X-Token")
         request.httpBody = encoded
+        return request
+    }
+    
+    private func performRequest<T: Encodable>(
+        path: String,
+        body: T,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let request: URLRequest
+        do {
+            request = try buildRequest(path: path, body: body)
+        } catch {
+            completion(.failure(error))
+            return
+        }
         
         session.dataTask(with: request) { _, response, error in
             if let error = error {
@@ -97,5 +112,22 @@ internal class LiveActivityRepository {
             
             completion(.success(()))
         }.resume()
+    }
+    
+    private func performDecodableRequest<TBody: Encodable, TResponse: Decodable>(
+        path: String,
+        body: TBody
+    ) async throws -> TResponse {
+        let request = try buildRequest(path: path, body: body)
+        
+        let (data, response) = try await session.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
+            throw LiveActivityError.serverError(code)
+        }
+        
+        return try JSONDecoder().decode(TResponse.self, from: data)
     }
 }

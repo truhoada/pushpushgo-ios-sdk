@@ -8,7 +8,7 @@
 import Foundation
 
 /// Errors that can occur during Live Activity operations
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 internal enum LiveActivityError: LocalizedError {
     case encodingFailed
     case invalidURL

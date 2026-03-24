@@ -23,7 +23,7 @@ import ActivityKit
 ///     }
 /// }
 /// ```
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 public struct PPGMatchLockScreenView: View {
     
     let context: ActivityViewContext<MatchActivityAttributes>

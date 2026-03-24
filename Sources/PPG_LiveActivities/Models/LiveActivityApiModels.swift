@@ -10,7 +10,7 @@ import Foundation
 // Request Models
 
 /// Request body for registering an ActivityKit push token with the PPG backend
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 struct RegisterPushTokenRequest: Codable {
     let activityId: String
     let templateId: String
@@ -19,14 +19,14 @@ struct RegisterPushTokenRequest: Codable {
 }
 
 /// Request body for tracking Live Activity events
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 struct LiveActivityEventRequest: Codable {
     let type: String
     let payload: LiveActivityEventPayload
 }
 
 /// Event payload with activity details
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 struct LiveActivityEventPayload: Codable {
     let activityId: String
     let templateId: String

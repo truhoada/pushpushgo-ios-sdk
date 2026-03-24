@@ -13,7 +13,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     // MatchPhase Tests
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseDisplayText() {
         XCTAssertEqual(MatchPhase.preMatch.displayText, "Pre-Match")
         XCTAssertEqual(MatchPhase.firstHalf.displayText, "1st Half")
@@ -24,7 +24,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(MatchPhase.matchEnded.displayText, "Match Ended")
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseIsPlaying() {
         // Playing phases
         XCTAssertTrue(MatchPhase.firstHalf.isPlaying)
@@ -42,7 +42,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertFalse(MatchPhase.matchEnded.isPlaying)
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseIsBreak() {
         XCTAssertTrue(MatchPhase.halfTimeBreak.isBreak)
         XCTAssertTrue(MatchPhase.extraTimeBreak.isBreak)
@@ -53,7 +53,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertFalse(MatchPhase.matchEnded.isBreak)
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseIsFinished() {
         XCTAssertTrue(MatchPhase.fullTime.isFinished)
         XCTAssertTrue(MatchPhase.matchEnded.isFinished)
@@ -63,7 +63,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertFalse(MatchPhase.penaltyShootout.isFinished)
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseIsAddedTime() {
         XCTAssertTrue(MatchPhase.firstHalfAddedTime.isAddedTime)
         XCTAssertTrue(MatchPhase.secondHalfAddedTime.isAddedTime)
@@ -74,7 +74,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertFalse(MatchPhase.secondHalf.isAddedTime)
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseShortText() {
         XCTAssertEqual(MatchPhase.firstHalf.shortText, "1H")
         XCTAssertEqual(MatchPhase.halfTimeBreak.shortText, "HT")
@@ -83,7 +83,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(MatchPhase.penaltyShootout.shortText, "PEN")
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseRawValueRoundtrip() {
         for phase in MatchPhase.allCases {
             let raw = phase.rawValue
@@ -92,7 +92,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         }
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseCodable() throws {
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
@@ -106,7 +106,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     // ContentState Tests
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testContentStateScoreDisplay() {
         let state = MatchActivityAttributes.ContentState(
             homeScore: 2,
@@ -119,7 +119,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(state.scoreCompact, "2:1")
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testContentStatePhaseProperty() {
         let state = MatchActivityAttributes.ContentState(
             homeScore: 0,
@@ -132,7 +132,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(state.phaseDisplayText, "1st Half")
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testContentStateUnknownPhase() {
         let state = MatchActivityAttributes.ContentState(
             homeScore: 0,
@@ -145,7 +145,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(state.phaseDisplayText, "UNKNOWN_PHASE")
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testContentStateCodable() throws {
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
@@ -167,7 +167,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertNil(decoded.startDate)
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testContentStateWithStartDate() throws {
         let encoder = JSONEncoder()
         let decoder = JSONDecoder()
@@ -190,7 +190,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     // MatchActivityAttributes Tests
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchActivityAttributesInit() {
         let attrs = MatchActivityAttributes(
             matchId: "match-123",
@@ -213,7 +213,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(attrs.ctaDeepLink, "myapp://match/123/stats")
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchActivityAttributesMinimalInit() {
         let attrs = MatchActivityAttributes(
             matchId: "match-456",
@@ -231,7 +231,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     // LiveActivityEventType Tests
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testLiveActivityEventTypeRawValues() {
         XCTAssertEqual(LiveActivityEventType.started.rawValue, "la.started")
         XCTAssertEqual(LiveActivityEventType.updated.rawValue, "la.updated")
@@ -243,14 +243,14 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     // LiveActivityDismissPolicy Tests
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testDismissPolicyCases() {
         let _ = LiveActivityDismissPolicy.immediate
         let _ = LiveActivityDismissPolicy.after(Date())
         let _ = LiveActivityDismissPolicy.default
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testDismissPolicyToSystemPolicy() {
         // .immediate maps to .immediate
         let immediatePolicy = LiveActivityDismissPolicy.immediate.toSystemPolicy()
@@ -268,7 +268,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     // MatchPhase Color Tests
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testMatchPhaseColor() {
         // Playing phases should be green
         XCTAssertEqual(MatchPhase.firstHalf.color, .green)
@@ -289,7 +289,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     
     // LiveActivityInfo Tests
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testLiveActivityInfoInit() {
         let date = Date()
         let info = LiveActivityInfo(
@@ -305,7 +305,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(info.startedAt, date)
     }
     
-    @available(iOS 16.2, *)
+    @available(iOS 17.2, *)
     func testLiveActivityInfoNilToken() {
         let info = LiveActivityInfo(
             activityId: "act-2",
@@ -315,5 +315,61 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         )
         
         XCTAssertNil(info.pushToken)
+    }
+    
+    // Observer Model Tests
+    
+    @available(iOS 17.2, *)
+    func testObserveRequestCodable() throws {
+        let request = ObserveRequest(
+            campaignId: "camp-1",
+            templateId: "match",
+            pushToStartToken: "abc123",
+            subscriberId: "sub-1",
+            supportsChannels: true
+        )
+        
+        let data = try JSONEncoder().encode(request)
+        let decoded = try JSONDecoder().decode(ObserveRequest.self, from: data)
+        
+        XCTAssertEqual(decoded.campaignId, "camp-1")
+        XCTAssertEqual(decoded.templateId, "match")
+        XCTAssertEqual(decoded.pushToStartToken, "abc123")
+        XCTAssertEqual(decoded.subscriberId, "sub-1")
+        XCTAssertTrue(decoded.supportsChannels)
+    }
+    
+    @available(iOS 17.2, *)
+    func testObserveResponseCodable() throws {
+        let json = """
+        {"status": "live", "channelId": "ch-abc123"}
+        """.data(using: .utf8)!
+        
+        let response = try JSONDecoder().decode(ObserveResponse.self, from: json)
+        XCTAssertEqual(response.status, "live")
+        XCTAssertEqual(response.channelId, "ch-abc123")
+    }
+    
+    @available(iOS 17.2, *)
+    func testObserveResponseWithoutChannel() throws {
+        let json = """
+        {"status": "scheduled", "channelId": null}
+        """.data(using: .utf8)!
+        
+        let response = try JSONDecoder().decode(ObserveResponse.self, from: json)
+        XCTAssertEqual(response.status, "scheduled")
+        XCTAssertNil(response.channelId)
+    }
+    
+    @available(iOS 17.2, *)
+    func testObserverErrorCases() {
+        let error1 = LiveActivityObserverError.activitiesNotEnabled
+        XCTAssertNotNil(error1)
+        
+        let error2 = LiveActivityObserverError.pushToStartTokenUnavailable
+        XCTAssertNotNil(error2)
+        
+        let error3 = LiveActivityObserverError.campaignUnavailable
+        XCTAssertNotNil(error3)
     }
 }

@@ -4,9 +4,9 @@ Display real-time activity tracking on the Lock Screen and Dynamic Island. Inclu
 
 ## Requirements
 
-- iOS 16.2+
-- Swift 5.3+
-- Xcode 14.1+
+- iOS 17.2+
+- Swift 5.9+
+- Xcode 15.0+
 
 ## Installation
 
@@ -194,13 +194,61 @@ The SDK provides a complete `MatchPhase` enum with all football match states:
 | `PENALTY_SHOOTOUT` | Penalties | Playing |
 | `MATCH_ENDED` | Match Ended | Finished |
 
-## Push-to-Update
+## Observer API (Recommended for Production)
 
-The SDK automatically registers ActivityKit push tokens with the PPG backend. This allows server-driven updates without the app being open:
+The primary production flow uses `observeLiveActivity` — the PPG backend controls the entire lifecycle remotely via ActivityKit push notifications.
 
-- Token registration happens automatically when an activity starts
-- Token changes are observed and re-registered
-- The backend sends push-to-update payloads via Apple's ActivityKit push API
+### How it works
+
+1. Create a campaign in the PPG panel or via PPG API
+2. User taps "Follow this match" in your app → SDK registers as observer
+3. PPG backend starts, updates, and ends the Live Activity via push
+4. On **iOS 18+**: broadcast channel (1 push → all observers)
+5. On **iOS 17.2–17.x**: per-device push tokens
+
+### Usage
+
+```swift
+// User taps "Follow match" button
+LiveActivitiesSDK.shared.observeLiveActivity(
+    MatchActivityAttributes.self,
+    campaignId: "camp-2026-final",
+    templateId: "match"
+) { status in
+    switch status {
+    case .registered:
+        print("Waiting for match to start...")
+    case .started(let activityId):
+        print("Live Activity started: \(activityId)")
+    case .updated(let activityId):
+        print("Activity updated: \(activityId)")
+    case .ended(let activityId):
+        print("Match ended: \(activityId)")
+    case .error(let error):
+        print("Error: \(error)")
+    }
+}
+
+// To stop observing
+LiveActivitiesSDK.shared.stopObserving(campaignId: "camp-2026-final")
+```
+
+### Observer vs Local Start
+
+| Feature | `observeLiveActivity` | `startActivity` |
+|---|---|---|
+| Who starts? | PPG backend (via push) | App code (locally) |
+| App must be open? | No (after registration) | Yes |
+| Best for | Production campaigns | Development/testing |
+| Scales to many users | Yes (channels on iOS 18+) | N/A (local only) |
+
+## Push Token Management
+
+The SDK automatically handles ActivityKit push tokens:
+
+- **Push-to-start tokens**: Sent to PPG backend when `observeLiveActivity` is called
+- **Push-to-update tokens**: Registered automatically after an activity starts
+- **Token rotation**: Observed and re-registered on change
 
 ## Dismiss Policies
 
@@ -231,7 +279,7 @@ Control when ended activities are removed from the Lock Screen:
    )
    ```
 3. **Verify Widget Extension** is properly configured and includes `PPG_LiveActivities`
-4. **Check device**: Live Activities require iPhone with iOS 16.1+. Dynamic Island requires iPhone 14 Pro or later.
+4. **Check device**: Live Activities require iPhone with iOS 17.2+. Dynamic Island requires iPhone 14 Pro or later.
 
 ### Push updates not working?
 
@@ -250,7 +298,11 @@ initialize(apiKey: String, projectId: String, isProduction: Bool, isDebug: Bool)
 // Check availability
 areActivitiesEnabled() -> Bool
 
-// Lifecycle — fully generic, works with any ActivityAttributes type
+// Observer API (production — backend-driven)
+observeLiveActivity<T>(_ type: T.Type, campaignId: String, templateId: String, onStatus:)
+stopObserving(campaignId: String)
+
+// Local lifecycle (development/testing or custom flows)
 startActivity<T>(attributes: T, initialState: T.ContentState, templateId: String) -> String?
 updateActivity<T>(_ type: T.Type, activityId: String, state: T.ContentState)
 endActivity<T>(_ type: T.Type, activityId: String, finalState: T.ContentState?, dismissPolicy:)

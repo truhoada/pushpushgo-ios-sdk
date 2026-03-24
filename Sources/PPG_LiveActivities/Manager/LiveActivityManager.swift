@@ -10,7 +10,7 @@ import ActivityKit
 
 /// Template-agnostic manager handling the lifecycle of any Live Activity.
 /// Uses Swift generics so adding a new template requires zero changes here.
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 internal class LiveActivityManager {
     
     private let repository: LiveActivityRepository
@@ -120,6 +120,39 @@ internal class LiveActivityManager {
     
     func getActiveActivities() -> [LiveActivityInfo] {
         return Array(activeActivities.values)
+    }
+    
+    // Observer Management (push-to-start flow)
+    
+    private var observers: [String: Any] = [:]
+    
+    @available(iOS 17.2, *)
+    func observeCampaign<T: ActivityAttributes>(
+        _ type: T.Type,
+        campaignId: String,
+        templateId: String,
+        onStatus: @escaping @Sendable (LiveActivityObserverStatus) -> Void
+    ) {
+        // Cancel any existing observer for this campaign
+        stopObserving(campaignId: campaignId)
+        
+        let observer = LiveActivityObserver<T>(
+            repository: repository,
+            campaignId: campaignId,
+            templateId: templateId,
+            statusHandler: onStatus
+        )
+        observers[campaignId] = observer
+        observer.start()
+        
+        LiveActivityLogger.shared.info("Observing campaign: \(campaignId)")
+    }
+    
+    @available(iOS 17.2, *)
+    func stopObserving(campaignId: String) {
+        if observers.removeValue(forKey: campaignId) != nil {
+            LiveActivityLogger.shared.info("Stopped observing campaign: \(campaignId)")
+        }
     }
     
     // Push Token Management
@@ -234,7 +267,7 @@ internal class LiveActivityManager {
 
 // Persistence helpers
 
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 private struct PersistableActivityInfo: Codable {
     let activityId: String
     let templateId: String
@@ -242,7 +275,7 @@ private struct PersistableActivityInfo: Codable {
     let startedAt: Date
 }
 
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 private extension JSONDecoder {
     static let iso8601: JSONDecoder = {
         let decoder = JSONDecoder()

@@ -9,7 +9,7 @@ import Foundation
 
 /// Bridge for communication with PPG_framework (Push SDK) without direct dependency.
 /// Uses UserDefaults shared keys and NotificationCenter for loose coupling.
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 internal class PushSDKBridge {
     
     // Shared Keys (match PPG_framework's SharedData and PushNotificationStatusProvider)

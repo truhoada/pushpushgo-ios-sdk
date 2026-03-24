@@ -23,7 +23,7 @@ import ActivityKit
 ///     templateId: "match"
 /// )
 /// ```
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 public class LiveActivitiesSDK {
     
     public static let shared = LiveActivitiesSDK()
@@ -123,6 +123,42 @@ public class LiveActivitiesSDK {
     /// Check if Live Activities are enabled on this device.
     public func areActivitiesEnabled() -> Bool {
         return ActivityAuthorizationInfo().areActivitiesEnabled
+    }
+    
+    // Observer API (push-to-start flow)
+    
+    /// Observe a Live Activity campaign. Registers this device as an observer
+    /// so the PPG backend can remotely start, update, and end the Live Activity.
+    ///
+    /// On iOS 18+ the activity will subscribe to a broadcast channel (1 push → all devices).
+    /// On iOS 17.2–17.x each device gets individual pushes.
+    ///
+    /// - Parameters:
+    ///   - type: The `ActivityAttributes` type for this template
+    ///   - campaignId: Campaign identifier from PPG panel / API
+    ///   - templateId: Template identifier for backend tracking (e.g. "match")
+    ///   - onStatus: Callback with lifecycle status updates
+    @available(iOS 17.2, *)
+    public func observeLiveActivity<T: ActivityAttributes>(
+        _ type: T.Type,
+        campaignId: String,
+        templateId: String,
+        onStatus: @escaping @Sendable (LiveActivityObserverStatus) -> Void
+    ) {
+        guard let manager = requireInitialized() else {
+            onStatus(.error(.activitiesNotEnabled))
+            return
+        }
+        
+        manager.observeCampaign(type, campaignId: campaignId, templateId: templateId, onStatus: onStatus)
+    }
+    
+    /// Stop observing a campaign. Cancels push-to-start token observation
+    /// and any pending activity state tracking.
+    @available(iOS 17.2, *)
+    public func stopObserving(campaignId: String) {
+        guard let manager = requireInitialized() else { return }
+        manager.stopObserving(campaignId: campaignId)
     }
     
     // Initialization guard (DRY)

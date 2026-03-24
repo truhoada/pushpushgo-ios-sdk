@@ -9,7 +9,7 @@ import Foundation
 import ActivityKit
 
 /// Configuration for the Live Activities SDK
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 public struct LiveActivityConfig {
     /// API key for PPG authentication
     public let apiKey: String
@@ -37,7 +37,7 @@ public struct LiveActivityConfig {
 }
 
 /// Policy for dismissing a Live Activity from the Lock Screen after ending
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 public enum LiveActivityDismissPolicy: Sendable {
     /// Remove immediately from Lock Screen
     case immediate
@@ -56,7 +56,7 @@ public enum LiveActivityDismissPolicy: Sendable {
 }
 
 /// Information about an active Live Activity
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 public struct LiveActivityInfo: Sendable {
     /// The activity identifier
     public let activityId: String
@@ -84,7 +84,7 @@ public struct LiveActivityInfo: Sendable {
 }
 
 /// Events tracked for Live Activity analytics
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 public enum LiveActivityEventType: String, Codable, Sendable {
     case started = "la.started"
     case updated = "la.updated"

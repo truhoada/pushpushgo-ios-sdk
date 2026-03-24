@@ -8,7 +8,7 @@
 import Foundation
 
 /// Logger for the Live Activities SDK with debug/release mode support
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 internal class LiveActivityLogger {
     
     static let shared = LiveActivityLogger()

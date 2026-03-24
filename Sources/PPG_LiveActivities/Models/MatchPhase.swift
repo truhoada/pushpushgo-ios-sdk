@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 
 /// Represents all possible phases of a football match
-@available(iOS 16.2, *)
+@available(iOS 17.2, *)
 public enum MatchPhase: String, Codable, CaseIterable, Sendable {
     case preMatch = "PRE_MATCH"
     case firstHalf = "FIRST_HALF"
