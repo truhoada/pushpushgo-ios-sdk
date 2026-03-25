@@ -160,27 +160,35 @@ public struct PPGMatchDynamicIsland {
         }
     }
     
-    // Compact Views
+    // Compact Views — badge(22) + score:score + badge(22) in leading, phase in trailing
     
     private var compactLeading: some View {
-        HStack(spacing: 4) {
-            teamBadge(url: context.attributes.homeTeamBadgeUrl, size: 16)
-            
-            Text("\(context.state.homeScore)")
+        HStack(spacing: 3) {
+            teamBadge(url: context.attributes.homeTeamBadgeUrl, size: 22)
+            Text(context.state.scoreCompact)
                 .font(.caption)
                 .fontWeight(.bold)
                 .monospacedDigit()
+            teamBadge(url: context.attributes.awayTeamBadgeUrl, size: 22)
         }
     }
     
     private var compactTrailing: some View {
-        HStack(spacing: 4) {
-            Text("\(context.state.awayScore)")
-                .font(.caption)
-                .fontWeight(.bold)
-                .monospacedDigit()
-            
-            teamBadge(url: context.attributes.awayTeamBadgeUrl, size: 16)
+        HStack(spacing: 3) {
+            if let phase = phase, phase.isPlaying {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 5, height: 5)
+                Text("\(context.state.matchMinute)'")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+            } else if let phase = phase {
+                Text(phase.shortText)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(phase.color)
+            }
         }
     }
     
@@ -195,21 +203,27 @@ public struct PPGMatchDynamicIsland {
     
     private func teamBadge(url: String?, size: CGFloat) -> some View {
         Group {
-            if let badgeUrl = url, let imageUrl = URL(string: badgeUrl) {
-                AsyncImage(url: imageUrl) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } placeholder: {
-                    Image(systemName: "shield.fill")
-                        .font(.system(size: size * 0.6))
-                        .foregroundColor(.secondary)
-                }
-                .frame(width: size, height: size)
+            if let image = LiveActivityImageManager.shared.loadImage(for: url) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
             } else {
-                Image(systemName: "shield.fill")
-                    .font(.system(size: size * 0.6))
-                    .foregroundColor(.secondary)
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.3), Color.white.opacity(0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: size, height: size)
+                    .overlay(
+                        Image(systemName: "shield.fill")
+                            .font(.system(size: size * 0.55))
+                            .foregroundColor(.white.opacity(0.9))
+                    )
             }
         }
     }

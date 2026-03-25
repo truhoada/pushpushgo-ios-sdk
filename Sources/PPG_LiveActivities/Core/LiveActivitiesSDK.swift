@@ -37,9 +37,16 @@ public class LiveActivitiesSDK {
     
     /// Initialize the Live Activities SDK.
     /// Must be called once before any other method.
+    /// - Parameters:
+    ///   - apiKey: PPG API key
+    ///   - projectId: PPG project identifier
+    ///   - appGroupId: App Group identifier shared between main app and widget extension (required for badge images)
+    ///   - isProduction: Use production API (default: true)
+    ///   - isDebug: Enable debug logging (default: false)
     public func initialize(
         apiKey: String,
         projectId: String,
+        appGroupId: String,
         isProduction: Bool = true,
         isDebug: Bool = false
     ) {
@@ -57,6 +64,9 @@ public class LiveActivitiesSDK {
         
         let repository = LiveActivityRepository(apiKey: apiKey, projectId: projectId, isProduction: isProduction)
         self.manager = LiveActivityManager(repository: repository)
+        
+        LiveActivityImageManager.shared.configure(appGroupId: appGroupId)
+        LiveActivityImageManager.shared.cleanExpiredAssets()
         
         PushSDKBridge.updateLAPermissionLabel(ActivityAuthorizationInfo().areActivitiesEnabled)
         

@@ -37,29 +37,40 @@ public struct PPGMatchLockScreenView: View {
     }
     
     public var body: some View {
-        HStack(spacing: 0) {
-            // Home team
-            teamView(
-                name: context.attributes.homeTeamName,
-                badgeUrl: context.attributes.homeTeamBadgeUrl,
-                score: context.state.homeScore,
-                alignment: .trailing
+        ZStack {
+            // Gradient background — replaces activityBackgroundTint for richer visuals
+            LinearGradient(
+                colors: [
+                    Color(red: 0.33, green: 0.80, blue: 0.47),   // emerald green
+                    Color(red: 0.35, green: 0.0, blue: 0.55)     // vivid purple
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
             )
             
-            // Center: score + phase
-            centerView
-            
-            // Away team
-            teamView(
-                name: context.attributes.awayTeamName,
-                badgeUrl: context.attributes.awayTeamBadgeUrl,
-                score: context.state.awayScore,
-                alignment: .leading
-            )
+            HStack(spacing: 0) {
+                // Home team
+                teamView(
+                    name: context.attributes.homeTeamName,
+                    badgeUrl: context.attributes.homeTeamBadgeUrl,
+                    score: context.state.homeScore,
+                    alignment: .trailing
+                )
+                
+                // Center: score + phase
+                centerView
+                
+                // Away team
+                teamView(
+                    name: context.attributes.awayTeamName,
+                    badgeUrl: context.attributes.awayTeamBadgeUrl,
+                    score: context.state.awayScore,
+                    alignment: .leading
+                )
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .activityBackgroundTint(Color.black.opacity(0.85))
         .activitySystemActionForegroundColor(.white)
     }
     
@@ -72,16 +83,13 @@ public struct PPGMatchLockScreenView: View {
         alignment: HorizontalAlignment
     ) -> some View {
         VStack(alignment: alignment, spacing: 4) {
-            // Badge
-            if let badgeUrl = badgeUrl, let url = URL(string: badgeUrl) {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                } placeholder: {
-                    teamBadgePlaceholder
-                }
-                .frame(width: 36, height: 36)
+            // Badge — loaded from shared App Group container
+            if let image = LiveActivityImageManager.shared.loadImage(for: badgeUrl) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 36, height: 36)
+                    .clipShape(Circle())
             } else {
                 teamBadgePlaceholder
             }
