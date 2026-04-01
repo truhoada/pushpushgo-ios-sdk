@@ -10,19 +10,6 @@ import WidgetKit
 import ActivityKit
 
 /// Pre-built Lock Screen view for the football match Live Activity template.
-///
-/// Usage in your Widget Extension:
-/// ```swift
-/// struct MatchLiveActivity: Widget {
-///     var body: some WidgetConfiguration {
-///         ActivityConfiguration(for: MatchActivityAttributes.self) { context in
-///             PPGMatchLockScreenView(context: context)
-///         } dynamicIsland: { context in
-///             PPGMatchDynamicIsland(context: context)
-///         }
-///     }
-/// }
-/// ```
 @available(iOS 17.2, *)
 public struct PPGMatchLockScreenView: View {
     

@@ -115,7 +115,7 @@ public class LiveActivityImageManager {
             let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])
             for fileURL in files {
                 if isExpired(at: fileURL) {
-                    try fileManager.removeItem(at: fileURL)
+                    deleteImage(at: fileURL)
                     cleanedCount += 1
                 }
             }
@@ -134,11 +134,10 @@ public class LiveActivityImageManager {
         do {
             let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             for fileURL in files {
-                try fileManager.removeItem(at: fileURL)
+                deleteImage(at: fileURL)
             }
-            LiveActivityLogger.shared.info("Cleared all cached image assets")
         } catch {
-            LiveActivityLogger.shared.error("Failed to clear assets: \(error.localizedDescription)")
+            LiveActivityLogger.shared.error("Failed to clear all assets: \(error.localizedDescription)")
         }
     }
     
@@ -193,6 +192,15 @@ public class LiveActivityImageManager {
         } catch {
             LiveActivityLogger.shared.error("Failed to save image: \(error.localizedDescription)")
             return false
+        }
+    }
+
+    private func deleteImage(at path: URL) {
+        do {
+            try fileManager.removeItem(at: path)
+            LiveActivityLogger.shared.debug("Deleted image: \(path.lastPathComponent)")
+        } catch {
+            LiveActivityLogger.shared.error("Failed to delete image: \(error.localizedDescription)")
         }
     }
     

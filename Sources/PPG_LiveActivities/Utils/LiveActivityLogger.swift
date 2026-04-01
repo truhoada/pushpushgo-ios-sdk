@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Logger for the Live Activities SDK with debug/release mode support
+/// Logger for the Live Activities SDK with debug mode support
 @available(iOS 17.2, *)
 internal class LiveActivityLogger {
     
@@ -23,23 +23,23 @@ internal class LiveActivityLogger {
         isDebugEnabled = enabled
     }
     
-    /// Log debug messages (only in debug mode)
+    /// Log debug messages
     func debug(_ message: String) {
         guard isDebugEnabled else { return }
         print("[\(tag)] 🔍 \(message)")
     }
     
-    /// Log info messages (always visible)
+    /// Log info messages
     func info(_ message: String) {
         print("[\(tag)] ℹ️ \(message)")
     }
     
-    /// Log warning messages (always visible)
+    /// Log warning messages
     func warning(_ message: String) {
         print("[\(tag)] ⚠️ \(message)")
     }
     
-    /// Log error messages (always visible)
+    /// Log error messagess
     func error(_ message: String) {
         print("[\(tag)] ❌ \(message)")
     }

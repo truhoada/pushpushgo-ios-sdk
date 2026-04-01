@@ -27,7 +27,7 @@ public enum MatchPhase: String, Codable, CaseIterable, Sendable {
     case penaltyShootout = "PENALTY_SHOOTOUT"
     case matchEnded = "MATCH_ENDED"
     
-    /// Human-readable display text for the match phase
+    /// Display text for the match phase
     public var displayText: String {
         switch self {
         case .preMatch:

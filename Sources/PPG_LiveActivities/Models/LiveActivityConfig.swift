@@ -64,7 +64,7 @@ public struct LiveActivityInfo: Sendable {
     /// The template ID used to create this activity
     public let templateId: String
     
-    /// The ActivityKit push token (hex string) for server-driven updates
+    /// The ActivityKit push token for server-driven updates
     public let pushToken: String?
     
     /// When the activity was started

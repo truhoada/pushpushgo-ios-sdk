@@ -9,22 +9,7 @@ import Foundation
 import ActivityKit
 
 /// ActivityAttributes for the football match Live Activity template.
-///
-/// Static properties are set when creating the activity and cannot change.
-/// Dynamic properties are in `ContentState` and update in real-time.
-///
-/// Usage in Widget Extension:
-/// ```swift
-/// struct MatchLiveActivity: Widget {
-///     var body: some WidgetConfiguration {
-///         ActivityConfiguration(for: MatchActivityAttributes.self) { context in
-///             PPGMatchLockScreenView(context: context)
-///         } dynamicIsland: { context in
-///             PPGMatchDynamicIsland(context: context)
-///         }
-///     }
-/// }
-/// ```
+
 @available(iOS 17.2, *)
 public struct MatchActivityAttributes: ActivityAttributes {
     

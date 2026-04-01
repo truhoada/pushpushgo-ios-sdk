@@ -8,7 +8,6 @@
 import Foundation
 
 /// Repository for Live Activity API communication with PPG backend.
-/// All network calls go through `performRequest` to avoid code duplication.
 @available(iOS 17.2, *)
 internal class LiveActivityRepository {
     
@@ -65,7 +64,7 @@ internal class LiveActivityRepository {
         return try await performDecodableRequest(path: "live-activity/observe", body: body)
     }
     
-    // Shared HTTP logic (DRY)
+    // Shared HTTP logic
     
     private func buildRequest<T: Encodable>(path: String, body: T) throws -> URLRequest {
         guard let url = URL(string: "\(baseURL)/v1/ios/\(projectId)/\(path)") else {

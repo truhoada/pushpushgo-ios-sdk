@@ -9,20 +9,7 @@ import Foundation
 import ActivityKit
 
 /// Main entry point for the PushPushGo Live Activities SDK.
-///
-/// All lifecycle methods are generic — they work with any `ActivityAttributes` type.
-/// Adding a new template only requires defining a new model; the SDK API stays unchanged.
-///
-/// Usage:
-/// ```swift
-/// LiveActivitiesSDK.shared.initialize(apiKey: "KEY", projectId: "ID")
-///
-/// let id = LiveActivitiesSDK.shared.startActivity(
-///     attributes: MatchActivityAttributes(matchId: "123", homeTeamName: "A", awayTeamName: "B"),
-///     initialState: .init(homeScore: 0, awayScore: 0, phase: .preMatch, matchMinute: "0"),
-///     templateId: "match"
-/// )
-/// ```
+
 @available(iOS 17.2, *)
 public class LiveActivitiesSDK {
     
@@ -136,10 +123,7 @@ public class LiveActivitiesSDK {
     }
     
     // Observer API (push-to-start flow)
-    
-    /// Observe a Live Activity campaign. Registers this device as an observer
-    /// so the PPG backend can remotely start, update, and end the Live Activity.
-    ///
+
     /// On iOS 18+ the activity will subscribe to a broadcast channel (1 push → all devices).
     /// On iOS 17.2–17.x each device gets individual pushes.
     ///

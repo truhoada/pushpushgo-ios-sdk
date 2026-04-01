@@ -8,8 +8,6 @@
 import Foundation
 import ActivityKit
 
-/// Template-agnostic manager handling the lifecycle of any Live Activity.
-/// Uses Swift generics so adding a new template requires zero changes here.
 @available(iOS 17.2, *)
 internal class LiveActivityManager {
     
@@ -23,9 +21,8 @@ internal class LiveActivityManager {
         restoreActiveActivities()
     }
     
-    // Lifecycle — fully generic
+    // Lifecycle
     
-    /// Start any Live Activity. Works with any `ActivityAttributes` type.
     func startActivity<T: ActivityAttributes>(
         attributes: T,
         initialState: T.ContentState,
