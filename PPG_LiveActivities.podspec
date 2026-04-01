@@ -7,7 +7,7 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
                        The PushPushGo Live Activities SDK enables real-time activity tracking on the Lock Screen
                        and Dynamic Island. Includes pre-built templates (e.g., football match) and supports
-                       custom templates. Requires iOS 16.1+.
+                       custom templates. Requires iOS 17.2+.
                        DESC
 
   s.homepage         = 'https://pushpushgo.com/pl/'
@@ -18,12 +18,12 @@ Pod::Spec.new do |s|
   
   s.source = { :git => 'https://github.com/ppgco/ios-sdk.git', :tag => s.version.to_s }
 
-  s.ios.deployment_target = '16.2'
+  s.ios.deployment_target = '17.2'
   s.swift_version = '5.3'
 
   s.source_files = 'Sources/PPG_LiveActivities/**/*.{h,m,swift}'
 
   # Framework dependencies
-  s.frameworks = 'ActivityKit', 'SwiftUI', 'WidgetKit', 'Foundation'
+  s.frameworks = 'ActivityKit', 'SwiftUI', 'WidgetKit', 'Foundation', 'CryptoKit'
 
 end

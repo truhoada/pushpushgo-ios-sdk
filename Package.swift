@@ -15,7 +15,7 @@ let package = Package(
         .library(
             name: "PPG_InAppMessages",
             targets: ["PPG_InAppMessages"]),
-        // Live Activities SDK (requires iOS 16.1+)
+        // Live Activities SDK (requires iOS 17.2+)
         .library(
             name: "PPG_LiveActivities",
             targets: ["PPG_LiveActivities"]),
@@ -52,7 +52,7 @@ let package = Package(
             dependencies: ["PPG_InAppMessages"],
             path: "Tests/PPG_InAppMessagesTests"),
         
-        // Live Activities SDK Target (requires iOS 16.1+, uses @available annotations)
+        // Live Activities SDK Target (requires iOS 17.2+, uses @available annotations)
         .target(
             name: "PPG_LiveActivities",
             dependencies: [],
@@ -61,7 +61,8 @@ let package = Package(
                 .linkedFramework("ActivityKit", .when(platforms: [.iOS])),
                 .linkedFramework("SwiftUI", .when(platforms: [.iOS])),
                 .linkedFramework("WidgetKit", .when(platforms: [.iOS])),
-                .linkedFramework("Foundation", .when(platforms: [.iOS]))
+                .linkedFramework("Foundation", .when(platforms: [.iOS])),
+                .linkedFramework("CryptoKit", .when(platforms: [.iOS]))
             ]),
         .testTarget(
             name: "PPG_LiveActivitiesTests",
