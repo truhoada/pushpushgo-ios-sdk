@@ -105,6 +105,71 @@ public class LiveActivityImageManager {
         return UIImage(contentsOfFile: path.path)
     }
     
+    /// Prefetch an image identified by its backend `imageType` and scope it to a campaign.
+    /// The file is stored with a deterministic name `<campaignId>_<imageType>.<ext>`
+    /// so both the main app and widget extension can locate it without sharing the URL.
+    /// - Parameters:
+    ///   - urlString: Remote image URL
+    ///   - imageType: Logical role of the image (from backend DTO)
+    ///   - campaignId: Live Notification / campaign identifier
+    /// - Returns: `true` if the image was saved successfully
+    @discardableResult
+    public func prefetch(from urlString: String, imageType: PPGLiveActivityImageType, campaignId: String) async -> Bool {
+        guard let url = URL(string: urlString) else {
+            LiveActivityLogger.shared.error("Invalid image URL: \(urlString)")
+            return false
+        }
+        
+        let targetPath = scopedLocalPath(imageType: imageType, campaignId: campaignId, ext: url.pathExtension)
+        if let targetPath = targetPath,
+           fileManager.fileExists(atPath: targetPath.path),
+           !isExpired(at: targetPath) {
+            LiveActivityLogger.shared.debug("Image already cached: \(targetPath.lastPathComponent)")
+            return true
+        }
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else {
+                LiveActivityLogger.shared.error("Failed to download image: HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+                return false
+            }
+            guard UIImage(data: data) != nil else {
+                LiveActivityLogger.shared.error("Downloaded data is not a valid image")
+                return false
+            }
+            guard let targetPath = targetPath else {
+                LiveActivityLogger.shared.error("Cannot build image path — is App Group configured?")
+                return false
+            }
+            try data.write(to: targetPath)
+            LiveActivityLogger.shared.debug("Saved image: \(targetPath.lastPathComponent)")
+            return true
+        } catch {
+            LiveActivityLogger.shared.error("Image download failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+    
+    /// Load an image by its backend `imageType` within a campaign scope.
+    public func loadImage(imageType: PPGLiveActivityImageType, campaignId: String) -> UIImage? {
+        guard let directory = imageDirectory() else { return nil }
+        let prefix = "\(campaignId)_\(imageType.rawValue)"
+        guard let files = try? fileManager.contentsOfDirectory(atPath: directory.path) else { return nil }
+        guard let match = files.first(where: { $0.hasPrefix(prefix) }) else { return nil }
+        return UIImage(contentsOfFile: directory.appendingPathComponent(match).path)
+    }
+    
+    /// Remove all cached images that belong to a given campaign.
+    public func removeAssets(forCampaign campaignId: String) {
+        guard let directory = imageDirectory() else { return }
+        guard let files = try? fileManager.contentsOfDirectory(atPath: directory.path) else { return }
+        for name in files where name.hasPrefix("\(campaignId)_") {
+            deleteImage(at: directory.appendingPathComponent(name))
+        }
+    }
+    
     /// Remove all cached images that are older than `maxAssetAge`.
     /// Call this on app launch (e.g. in `application(_:didFinishLaunchingWithOptions:)`).
     public func cleanExpiredAssets() {
@@ -168,6 +233,12 @@ public class LiveActivityImageManager {
     private func localPath(for urlString: String) -> URL? {
         guard let directory = imageDirectory() else { return nil }
         return directory.appendingPathComponent(fileName(for: urlString))
+    }
+    
+    private func scopedLocalPath(imageType: PPGLiveActivityImageType, campaignId: String, ext: String?) -> URL? {
+        guard let directory = imageDirectory() else { return nil }
+        let safeExt = (ext?.isEmpty == false) ? ext! : "png"
+        return directory.appendingPathComponent("\(campaignId)_\(imageType.rawValue).\(safeExt)")
     }
     
     private func fileName(for urlString: String) -> String {
