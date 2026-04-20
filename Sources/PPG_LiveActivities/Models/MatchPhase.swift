@@ -26,6 +26,7 @@ public enum MatchPhase: String, Codable, CaseIterable, Sendable {
     case extraTimeSecondHalfAddedTime = "EXTRA_TIME_SECOND_HALF_ADDED_TIME"
     case penaltyShootout = "PENALTY_SHOOTOUT"
     case matchEnded = "MATCH_ENDED"
+    case other = "OTHER"
     
     /// Display text for the match phase
     public var displayText: String {
@@ -60,6 +61,8 @@ public enum MatchPhase: String, Codable, CaseIterable, Sendable {
             return "Penalties"
         case .matchEnded:
             return "Match Ended"
+        case .other:
+            return ""
         }
     }
     
@@ -126,6 +129,7 @@ public enum MatchPhase: String, Codable, CaseIterable, Sendable {
         case .extraTimeSecondHalfAddedTime: return "ET2+"
         case .penaltyShootout: return "PEN"
         case .matchEnded: return "END"
+        case .other: return ""
         }
     }
     

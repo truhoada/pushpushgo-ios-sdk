@@ -372,4 +372,117 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         let error3 = LiveActivityObserverError.campaignUnavailable
         XCTAssertNotNil(error3)
     }
+    
+    // Backend DTO Codable Tests
+    
+    @available(iOS 17.2, *)
+    func testPPGColorBasicCodable() throws {
+        let json = "{\"type\":\"BASIC\",\"hex\":\"#FF5733\"}".data(using: .utf8)!
+        let color = try JSONDecoder().decode(PPGColor.self, from: json)
+        if case .basic(let hex) = color {
+            XCTAssertEqual(hex, "#FF5733")
+        } else {
+            XCTFail("Expected .basic")
+        }
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGColorGradientCodable() throws {
+        let json = "{\"type\":\"GRADIENT\",\"fromHex\":\"#000\",\"toHex\":\"#FFF\",\"direction\":\"LEFT_TO_RIGHT\"}".data(using: .utf8)!
+        let color = try JSONDecoder().decode(PPGColor.self, from: json)
+        if case .gradient(let from, let to, let dir) = color {
+            XCTAssertEqual(from, "#000")
+            XCTAssertEqual(to, "#FFF")
+            XCTAssertEqual(dir, .leftToRight)
+        } else {
+            XCTFail("Expected .gradient")
+        }
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGBasicColorSetCodable() throws {
+        let jsonString = """
+        {
+          "lightMode": {"type":"BASIC","hex":"#FFFFFF"},
+          "darkMode":  {"type":"BASIC","hex":"#000000"}
+        }
+        """
+        let json = jsonString.data(using: .utf8)!
+        let set = try JSONDecoder().decode(PPGBasicColorSet.self, from: json)
+        XCTAssertEqual(set.lightMode, "#FFFFFF")
+        XCTAssertEqual(set.darkMode, "#000000")
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGLiveActivityActionUrlCodable() throws {
+        let jsonString = """
+        {
+          "type": "URL",
+          "name": "Stats",
+          "url": "https://example.com",
+          "design": {
+            "ios": {
+              "alignment": "CENTER",
+              "borderRadius": 8,
+              "textColor":       {"lightMode":{"type":"BASIC","hex":"#FFF"},"darkMode":{"type":"BASIC","hex":"#FFF"}},
+              "backgroundColor": {"lightMode":{"type":"BASIC","hex":"#000"},"darkMode":{"type":"BASIC","hex":"#000"}},
+              "border": null
+            }
+          }
+        }
+        """
+        let json = jsonString.data(using: .utf8)!
+        let action = try JSONDecoder().decode(PPGLiveActivityAction.self, from: json)
+        if case .url(let name, let url, _) = action {
+            XCTAssertEqual(name, "Stats")
+            XCTAssertEqual(url, "https://example.com")
+        } else {
+            XCTFail("Expected .url action")
+        }
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGFootballMatchLiveDataCodable() throws {
+        let json = "{\"type\":\"FOOTBALL_MATCH_TRACKING\",\"homeTeamScore\":2,\"awayTeamScore\":1,\"status\":\"SECOND_HALF\"}".data(using: .utf8)!
+        let live = try JSONDecoder().decode(PPGFootballMatchLiveData.self, from: json)
+        XCTAssertEqual(live.homeTeamScore, 2)
+        XCTAssertEqual(live.awayTeamScore, 1)
+        XCTAssertEqual(live.status, .secondHalf)
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGFootballMatchConfigurationLookupHelpers() {
+        let content = PPGFootballMatchContent(
+            title: "Bayern vs Dortmund",
+            homeTeamName: "Bayern",
+            homeTeamImage: "https://example.com/h.png",
+            awayTeamName: "Dortmund",
+            awayTeamImage: "https://example.com/a.png"
+        )
+        let ios = PPGFootballMatchIOSDesign(statusBackgrounds: [
+            "PRE_MATCH": PPGColorSet(.basic(hex: "#111")),
+            "OTHER":     PPGColorSet(.basic(hex: "#333"))
+        ])
+        let android = PPGFootballMatchAndroidDesign(
+            hasTrackerIcon: true,
+            progressBarColor: PPGBasicColorSet("#000"),
+            breakTimeBarColor: nil
+        )
+        let config = PPGFootballMatchConfiguration(
+            content: content,
+            design: PPGFootballMatchDesign(android: android, ios: ios),
+            statusLabels: ["PRE_MATCH": "Przed meczem", "OTHER": "—"],
+            actions: [],
+            timeout: PPGLiveActivityTimeout(minutes: 150)
+        )
+        
+        // Direct hit
+        XCTAssertEqual(config.label(for: .preMatch), "Przed meczem")
+        // OTHER fallback for missing status
+        XCTAssertEqual(config.label(for: .penaltyShootout), "—")
+        // Background — direct hit
+        XCTAssertNotNil(config.background(for: .preMatch))
+        // Background — OTHER fallback
+        XCTAssertNotNil(config.background(for: .secondHalf))
+    }
 }
