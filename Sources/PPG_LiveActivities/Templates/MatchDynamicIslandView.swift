@@ -111,7 +111,7 @@ public struct PPGMatchDynamicIsland {
                             .foregroundColor(.green)
                     }
                     
-                    Text(phase.displayText)
+                    Text(context.attributes.label(for: phase))
                         .font(.caption2)
                         .fontWeight(.medium)
                         .foregroundColor(phase.color)

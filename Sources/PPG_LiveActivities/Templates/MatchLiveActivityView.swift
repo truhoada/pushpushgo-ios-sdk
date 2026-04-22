@@ -15,6 +15,8 @@ public struct PPGMatchLockScreenView: View {
     
     let context: ActivityViewContext<MatchActivityAttributes>
     
+    @Environment(\.colorScheme) private var colorScheme
+    
     public init(context: ActivityViewContext<MatchActivityAttributes>) {
         self.context = context
     }
@@ -23,9 +25,14 @@ public struct PPGMatchLockScreenView: View {
         return MatchPhase(rawValue: context.state.matchPhase)
     }
     
-    public var body: some View {
-        ZStack {
-            // Gradient background — replaces activityBackgroundTint for richer visuals
+    /// Background for the current match phase — uses backend-provided
+    /// `statusBackgrounds` when available, falls back to the built-in gradient.
+    @ViewBuilder
+    private var backgroundView: some View {
+        if let phase = phase,
+           let colorSet = context.attributes.background(for: phase) {
+            colorSet.view(for: colorScheme)
+        } else {
             LinearGradient(
                 colors: [
                     Color(red: 0.33, green: 0.80, blue: 0.47),   // emerald green
@@ -34,6 +41,12 @@ public struct PPGMatchLockScreenView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
+        }
+    }
+    
+    public var body: some View {
+        ZStack {
+            backgroundView
             
             HStack(spacing: 0) {
                 // Home team
@@ -128,7 +141,7 @@ public struct PPGMatchLockScreenView: View {
                             .foregroundColor(.green)
                     }
                     
-                    Text(phase.displayText)
+                    Text(context.attributes.label(for: phase))
                         .font(.caption)
                         .fontWeight(.medium)
                         .foregroundColor(phase.color)
