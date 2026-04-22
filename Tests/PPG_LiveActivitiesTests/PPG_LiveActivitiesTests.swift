@@ -451,6 +451,110 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     }
     
     @available(iOS 17.2, *)
+    func testMatchActivityAttributesFromDTO() {
+        let config = PPGFootballMatchConfiguration(
+            content: PPGFootballMatchContent(
+                title: "Bundesliga",
+                homeTeamName: "Bayern",
+                homeTeamImage: "https://cdn.ppg.com/h.png",
+                awayTeamName: "Dortmund",
+                awayTeamImage: "https://cdn.ppg.com/a.png"
+            ),
+            design: PPGFootballMatchDesign(
+                android: PPGFootballMatchAndroidDesign(
+                    hasTrackerIcon: false,
+                    progressBarColor: PPGBasicColorSet("#000"),
+                    breakTimeBarColor: nil
+                ),
+                ios: PPGFootballMatchIOSDesign(statusBackgrounds: [
+                    "PRE_MATCH": PPGColorSet(.basic(hex: "#FFF"))
+                ])
+            ),
+            statusLabels: ["PRE_MATCH": "Przed meczem"],
+            actions: [
+                .url(
+                    name: "Statystyki",
+                    url: "https://example.com/stats",
+                    design: PPGActionDesign(ios: PPGActionIOSDesign(
+                        alignment: .center,
+                        borderRadius: 8,
+                        textColor: PPGBasicColorSet("#FFF"),
+                        backgroundColor: PPGBasicColorSet("#000"),
+                        border: nil
+                    ))
+                )
+            ],
+            timeout: PPGLiveActivityTimeout(minutes: 180)
+        )
+        let dto = PPGLiveNotificationDTO(
+            id: "la_abc123",
+            projectId: "proj_xyz",
+            template: .footballMatchTracking,
+            name: "Bayern vs Dortmund",
+            configuration: .footballMatchTracking(config),
+            liveData: .footballMatchTracking(PPGFootballMatchLiveData(
+                homeTeamScore: 1,
+                awayTeamScore: 0,
+                status: .firstHalf
+            )),
+            lifecycle: PPGLiveNotificationLifecycle(status: .ongoing),
+            startPolicy: PPGLiveActivityStartPolicy(
+                scheduledAt: Date(timeIntervalSince1970: 1713724200),
+                countdown: nil
+            ),
+            metadata: PPGLiveNotificationMetadata(createdBy: "user_1"),
+            createdAt: Date(),
+            updatedAt: Date(),
+            deletedAt: nil
+        )
+        
+        guard let result = MatchActivityAttributes.from(dto: dto) else {
+            XCTFail("Mapping failed")
+            return
+        }
+        
+        // Attributes
+        XCTAssertEqual(result.attributes.matchId, "la_abc123")
+        XCTAssertEqual(result.attributes.notificationId, "la_abc123")
+        XCTAssertEqual(result.attributes.homeTeamName, "Bayern")
+        XCTAssertEqual(result.attributes.awayTeamName, "Dortmund")
+        XCTAssertEqual(result.attributes.homeTeamBadgeUrl, "https://cdn.ppg.com/h.png")
+        XCTAssertEqual(result.attributes.awayTeamBadgeUrl, "https://cdn.ppg.com/a.png")
+        XCTAssertNotNil(result.attributes.configuration)
+        
+        // First URL action promoted to CTA
+        XCTAssertEqual(result.attributes.ctaText, "Statystyki")
+        XCTAssertEqual(result.attributes.ctaDeepLink, "https://example.com/stats")
+        
+        // Config-aware helpers
+        XCTAssertEqual(result.attributes.label(for: .preMatch), "Przed meczem")
+        XCTAssertEqual(result.attributes.title, "Bundesliga")
+        XCTAssertEqual(result.attributes.actions.count, 1)
+        XCTAssertNotNil(result.attributes.background(for: .preMatch))
+        
+        // Initial ContentState
+        XCTAssertEqual(result.initialState.homeScore, 1)
+        XCTAssertEqual(result.initialState.awayScore, 0)
+        XCTAssertEqual(result.initialState.phase, .firstHalf)
+        XCTAssertEqual(result.initialState.startDate, Date(timeIntervalSince1970: 1713724200))
+    }
+    
+    @available(iOS 17.2, *)
+    func testMatchActivityAttributesWithoutConfigurationFallbacks() {
+        let attrs = MatchActivityAttributes(
+            matchId: "m1",
+            homeTeamName: "A",
+            awayTeamName: "B"
+        )
+        
+        // No config → helpers fall back to defaults
+        XCTAssertNil(attrs.background(for: .firstHalf))
+        XCTAssertEqual(attrs.label(for: .firstHalf), MatchPhase.firstHalf.displayText)
+        XCTAssertTrue(attrs.actions.isEmpty)
+        XCTAssertEqual(attrs.title, "")
+    }
+    
+    @available(iOS 17.2, *)
     func testPPGFootballMatchConfigurationLookupHelpers() {
         let content = PPGFootballMatchContent(
             title: "Bayern vs Dortmund",

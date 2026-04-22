@@ -39,6 +39,13 @@ public struct MatchActivityAttributes: ActivityAttributes {
     /// Call-to-action deep link URL
     public let ctaDeepLink: String?
     
+    /// Backend-provided PPG Live Notification identifier (campaign id).
+    /// Present when this Activity was created from a `PPGLiveNotificationDTO`.
+    public let notificationId: String?
+    
+    /// Full backend-driven configuration (status colors, labels, actions, timeout).
+    public let configuration: PPGFootballMatchConfiguration?
+    
     // ContentState (dynamic, updated in real-time)
     
     public struct ContentState: Codable, Hashable {
@@ -117,7 +124,9 @@ public struct MatchActivityAttributes: ActivityAttributes {
         awayTeamBadgeUrl: String? = nil,
         deepLink: String? = nil,
         ctaText: String? = nil,
-        ctaDeepLink: String? = nil
+        ctaDeepLink: String? = nil,
+        notificationId: String? = nil,
+        configuration: PPGFootballMatchConfiguration? = nil
     ) {
         self.matchId = matchId
         self.homeTeamName = homeTeamName
@@ -127,5 +136,77 @@ public struct MatchActivityAttributes: ActivityAttributes {
         self.deepLink = deepLink
         self.ctaText = ctaText
         self.ctaDeepLink = ctaDeepLink
+        self.notificationId = notificationId
+        self.configuration = configuration
+    }
+    
+    // Backend DTO mapping
+    
+    /// Build `MatchActivityAttributes` + initial `ContentState` from a backend
+    /// `PPGLiveNotificationDTO`. Returns `nil` if the DTO is not a football match
+    /// template.
+    ///
+    /// Use this when starting a Live Activity in response to an in-app event
+    /// delivered by PPG backend. The initial `ContentState` reflects the
+    /// current `liveData` snapshot.
+    public static func from(
+        dto: PPGLiveNotificationDTO
+    ) -> (attributes: MatchActivityAttributes, initialState: ContentState)? {
+        guard let config = dto.footballMatchConfiguration,
+              let liveData = dto.footballMatchLiveData else {
+            return nil
+        }
+        
+        // First URL action is promoted to the built-in CTA slot for backward
+        // compatibility with older widgets that only render a single CTA.
+        let firstUrlAction: (name: String, url: String)? = config.actions.compactMap { action -> (String, String)? in
+            if case .url(let name, let url, _) = action { return (name, url) }
+            return nil
+        }.first
+        
+        let attributes = MatchActivityAttributes(
+            matchId: dto.id,
+            homeTeamName: config.content.homeTeamName,
+            awayTeamName: config.content.awayTeamName,
+            homeTeamBadgeUrl: config.content.homeTeamImage,
+            awayTeamBadgeUrl: config.content.awayTeamImage,
+            deepLink: nil,
+            ctaText: firstUrlAction?.name,
+            ctaDeepLink: firstUrlAction?.url,
+            notificationId: dto.id,
+            configuration: config
+        )
+        
+        let state = ContentState(
+            homeScore: liveData.homeTeamScore,
+            awayScore: liveData.awayTeamScore,
+            phase: liveData.status,
+            matchMinute: "",
+            startDate: dto.startPolicy.scheduledAt
+        )
+        
+        return (attributes, state)
+    }
+    
+    // Config-aware convenience helpers
+    
+    /// Background color set for the given match status.
+    public func background(for status: MatchPhase) -> PPGColorSet? {
+        configuration?.background(for: status)
+    }
+    
+    /// Display label for the given match status.
+    public func label(for status: MatchPhase) -> String {
+        configuration?.label(for: status) ?? status.displayText
+    }
+    
+    /// All backend-defined actions (URL / open app / close) for this activity.
+    public var actions: [PPGLiveActivityAction] {
+        configuration?.actions ?? []
+    }
+    
+    /// Title shown in the header of the Live Activity.
+    public var title: String {
+        configuration?.content.title ?? ""
     }
 }
