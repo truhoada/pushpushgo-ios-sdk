@@ -258,6 +258,7 @@ internal class LiveActivityManager {
         activeActivities.removeValue(forKey: activityId)
         tokenObservationTasks[activityId]?.cancel()
         tokenObservationTasks.removeValue(forKey: activityId)
+        HotMessageStore.shared.clear(activityID: activityId)
         persistActiveActivities()
     }
 }

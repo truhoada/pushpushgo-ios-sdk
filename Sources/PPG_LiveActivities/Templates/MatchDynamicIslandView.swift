@@ -120,31 +120,34 @@ public struct PPGMatchDynamicIsland {
         }
     }
     
+    @ViewBuilder
     private var expandedBottom: some View {
-        Group {
-            if let ctaText = context.attributes.ctaText, !ctaText.isEmpty {
-                if let ctaDeepLink = context.attributes.ctaDeepLink,
-                   let url = URL(string: ctaDeepLink) {
-                    Link(destination: url) {
-                        Text(ctaText)
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(Color.blue.opacity(0.3))
-                            .cornerRadius(8)
-                    }
-                } else {
-                    Text(ctaText)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.3))
-                        .cornerRadius(8)
+        // Hot message takes priority over CTA when active — same slot, last wins.
+        if let hotMessage = context.state.hotMessage {
+            PPGHotMessageView(
+                hotMessage: hotMessage,
+                activityID: context.activityID
+            )
+        } else if let ctaText = context.attributes.ctaText, !ctaText.isEmpty {
+            if let ctaDeepLink = context.attributes.ctaDeepLink,
+               let url = URL(string: ctaDeepLink) {
+                Link(destination: url) {
+                    ctaLabel(text: ctaText)
                 }
+            } else {
+                ctaLabel(text: ctaText)
             }
         }
+    }
+    
+    private func ctaLabel(text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 6)
+            .background(Color.blue.opacity(0.3))
+            .cornerRadius(8)
     }
     
     // Compact Views — badge(22) + score:score + badge(22) in leading, phase in trailing

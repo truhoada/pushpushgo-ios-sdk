@@ -48,28 +48,40 @@ public struct PPGMatchLockScreenView: View {
         ZStack {
             backgroundView
             
-            HStack(spacing: 0) {
-                // Home team
-                teamView(
-                    name: context.attributes.homeTeamName,
-                    badgeUrl: context.attributes.homeTeamBadgeUrl,
-                    score: context.state.homeScore,
-                    alignment: .trailing
-                )
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    // Home team
+                    teamView(
+                        name: context.attributes.homeTeamName,
+                        badgeUrl: context.attributes.homeTeamBadgeUrl,
+                        score: context.state.homeScore,
+                        alignment: .trailing
+                    )
+                    
+                    // Center: score + phase
+                    centerView
+                    
+                    // Away team
+                    teamView(
+                        name: context.attributes.awayTeamName,
+                        badgeUrl: context.attributes.awayTeamBadgeUrl,
+                        score: context.state.awayScore,
+                        alignment: .leading
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
                 
-                // Center: score + phase
-                centerView
-                
-                // Away team
-                teamView(
-                    name: context.attributes.awayTeamName,
-                    badgeUrl: context.attributes.awayTeamBadgeUrl,
-                    score: context.state.awayScore,
-                    alignment: .leading
-                )
+                // Hot message banner — transient, auto-hides after duration
+                if let hotMessage = context.state.hotMessage {
+                    PPGHotMessageView(
+                        hotMessage: hotMessage,
+                        activityID: context.activityID
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
         }
         .activitySystemActionForegroundColor(.white)
     }

@@ -55,6 +55,8 @@ public class LiveActivitiesSDK {
         LiveActivityImageManager.shared.configure(appGroupId: appGroupId)
         LiveActivityImageManager.shared.cleanExpiredAssets()
         
+        HotMessageStore.shared.configure(appGroupId: appGroupId)
+        
         PushSDKBridge.updateLAPermissionLabel(ActivityAuthorizationInfo().areActivitiesEnabled)
         
         self.isInitialized = true

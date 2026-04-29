@@ -188,37 +188,197 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(decoded.startDate?.timeIntervalSince1970, date.timeIntervalSince1970, accuracy: 1)
     }
     
+    // PPGHotMessage Tests
+    
+    @available(iOS 17.2, *)
+    func testPPGHotMessageCodable() throws {
+        let json = #"{"id":"msg_123","text":"Gol anulowany po VAR","durationSeconds":5}"#.data(using: .utf8)!
+        let message = try JSONDecoder().decode(PPGHotMessage.self, from: json)
+        XCTAssertEqual(message.id, "msg_123")
+        XCTAssertEqual(message.text, "Gol anulowany po VAR")
+        XCTAssertEqual(message.durationSeconds, 5)
+        
+        let reEncoded = try JSONEncoder().encode(message)
+        let roundTrip = try JSONDecoder().decode(PPGHotMessage.self, from: reEncoded)
+        XCTAssertEqual(roundTrip, message)
+    }
+    
+    @available(iOS 17.2, *)
+    func testContentStateWithHotMessage() throws {
+        let encoder = JSONEncoder()
+        let decoder = JSONDecoder()
+        
+        let state = MatchActivityAttributes.ContentState(
+            homeScore: 2,
+            awayScore: 1,
+            phase: .secondHalf,
+            matchMinute: "78",
+            hotMessage: PPGHotMessage(id: "m1", text: "GOL!", durationSeconds: 5)
+        )
+        
+        let data = try encoder.encode(state)
+        let decoded = try decoder.decode(MatchActivityAttributes.ContentState.self, from: data)
+        
+        XCTAssertEqual(decoded.hotMessage?.id, "m1")
+        XCTAssertEqual(decoded.hotMessage?.text, "GOL!")
+        XCTAssertEqual(decoded.hotMessage?.durationSeconds, 5)
+    }
+    
+    @available(iOS 17.2, *)
+    func testContentStateWithoutHotMessageIsNil() throws {
+        let state = MatchActivityAttributes.ContentState(
+            homeScore: 0,
+            awayScore: 0,
+            phase: .preMatch,
+            matchMinute: "0"
+        )
+        XCTAssertNil(state.hotMessage)
+    }
+    
+    // HotMessageStore Tests
+    
+    @available(iOS 17.2, *)
+    func testHotMessageStoreReturnsStableReceivedAtForSameId() {
+        let suiteName = "test.ppg.hotmessagestore.\(UUID().uuidString)"
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        
+        HotMessageStore.shared.configure(appGroupId: suiteName)
+        
+        let first = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_1")
+        Thread.sleep(forTimeInterval: 0.05)
+        let second = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_1")
+        
+        XCTAssertEqual(first.timeIntervalSince1970, second.timeIntervalSince1970, accuracy: 0.001,
+                       "Same (activityID, hotMessageId) must return the same timestamp across calls")
+    }
+    
+    @available(iOS 17.2, *)
+    func testHotMessageStoreResetsOnNewHotMessageId() {
+        let suiteName = "test.ppg.hotmessagestore.\(UUID().uuidString)"
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        
+        HotMessageStore.shared.configure(appGroupId: suiteName)
+        
+        let first = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_1")
+        Thread.sleep(forTimeInterval: 0.05)
+        let second = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_2")
+        
+        XCTAssertGreaterThan(second.timeIntervalSince1970, first.timeIntervalSince1970,
+                             "A new hotMessageId must reset the receivedAt timestamp")
+    }
+    
+    @available(iOS 17.2, *)
+    func testHotMessageStoreIsolatesAcrossActivities() {
+        let suiteName = "test.ppg.hotmessagestore.\(UUID().uuidString)"
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        
+        HotMessageStore.shared.configure(appGroupId: suiteName)
+        
+        let activityA = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_1")
+        Thread.sleep(forTimeInterval: 0.05)
+        let activityB = HotMessageStore.shared.receivedAt(activityID: "B", hotMessageId: "msg_1")
+        
+        XCTAssertGreaterThan(activityB.timeIntervalSince1970, activityA.timeIntervalSince1970,
+                             "Different activityIDs must have independent timestamps even for the same hotMessageId")
+        
+        // Re-reading A must still return the original timestamp
+        let activityAAgain = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_1")
+        XCTAssertEqual(activityA.timeIntervalSince1970, activityAAgain.timeIntervalSince1970, accuracy: 0.001)
+    }
+    
+    @available(iOS 17.2, *)
+    func testHotMessageStoreClearRemovesEntry() {
+        let suiteName = "test.ppg.hotmessagestore.\(UUID().uuidString)"
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        
+        HotMessageStore.shared.configure(appGroupId: suiteName)
+        
+        let first = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_1")
+        HotMessageStore.shared.clear(activityID: "A")
+        Thread.sleep(forTimeInterval: 0.05)
+        let afterClear = HotMessageStore.shared.receivedAt(activityID: "A", hotMessageId: "msg_1")
+        
+        XCTAssertGreaterThan(afterClear.timeIntervalSince1970, first.timeIntervalSince1970,
+                             "After clear, the next call must produce a fresh timestamp")
+    }
+    
     // MatchActivityAttributes Tests
     
     @available(iOS 17.2, *)
+    private func makeAttributes(
+        notificationId: String = "match-123",
+        homeTeamName: String = "Brazil",
+        awayTeamName: String = "Germany",
+        homeTeamImage: String? = "https://example.com/brazil.png",
+        awayTeamImage: String? = "https://example.com/germany.png",
+        title: String = "World Cup Final",
+        statusLabels: [String: String] = [:],
+        actions: [PPGLiveActivityAction] = []
+    ) -> MatchActivityAttributes {
+        MatchActivityAttributes(
+            notificationId: notificationId,
+            type: .footballMatchTracking,
+            content: PPGFootballMatchContent(
+                title: title,
+                homeTeamName: homeTeamName,
+                homeTeamImage: homeTeamImage,
+                awayTeamName: awayTeamName,
+                awayTeamImage: awayTeamImage
+            ),
+            design: PPGFootballMatchDesign(
+                android: PPGFootballMatchAndroidDesign(
+                    hasTrackerIcon: false,
+                    progressBarColor: PPGBasicColorSet("#000"),
+                    breakTimeBarColor: nil
+                ),
+                ios: PPGFootballMatchIOSDesign(statusBackgrounds: nil)
+            ),
+            statusLabels: statusLabels,
+            actions: actions,
+            timeout: PPGLiveActivityTimeout(minutes: 180)
+        )
+    }
+    
+    @available(iOS 17.2, *)
     func testMatchActivityAttributesInit() {
-        let attrs = MatchActivityAttributes(
-            matchId: "match-123",
+        let attrs = makeAttributes(
+            notificationId: "match-123",
             homeTeamName: "Brazil",
             awayTeamName: "Germany",
-            homeTeamBadgeUrl: "https://example.com/brazil.png",
-            awayTeamBadgeUrl: "https://example.com/germany.png",
-            deepLink: "myapp://match/123",
-            ctaText: "Stats",
-            ctaDeepLink: "myapp://match/123/stats"
+            actions: [
+                .url(
+                    name: "Stats",
+                    url: "myapp://match/123/stats",
+                    design: PPGActionDesign(ios: PPGActionIOSDesign(
+                        alignment: .center,
+                        borderRadius: 8,
+                        textColor: PPGBasicColorSet("#FFF"),
+                        backgroundColor: PPGBasicColorSet("#000"),
+                        border: nil
+                    ))
+                )
+            ]
         )
         
         XCTAssertEqual(attrs.matchId, "match-123")
+        XCTAssertEqual(attrs.notificationId, "match-123")
         XCTAssertEqual(attrs.homeTeamName, "Brazil")
         XCTAssertEqual(attrs.awayTeamName, "Germany")
         XCTAssertEqual(attrs.homeTeamBadgeUrl, "https://example.com/brazil.png")
         XCTAssertEqual(attrs.awayTeamBadgeUrl, "https://example.com/germany.png")
-        XCTAssertEqual(attrs.deepLink, "myapp://match/123")
+        XCTAssertNil(attrs.deepLink)  // not in backend payload yet
         XCTAssertEqual(attrs.ctaText, "Stats")
         XCTAssertEqual(attrs.ctaDeepLink, "myapp://match/123/stats")
     }
     
     @available(iOS 17.2, *)
     func testMatchActivityAttributesMinimalInit() {
-        let attrs = MatchActivityAttributes(
-            matchId: "match-456",
+        let attrs = makeAttributes(
+            notificationId: "match-456",
             homeTeamName: "Team A",
-            awayTeamName: "Team B"
+            awayTeamName: "Team B",
+            homeTeamImage: nil,
+            awayTeamImage: nil
         )
         
         XCTAssertEqual(attrs.matchId, "match-456")
@@ -227,6 +387,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertNil(attrs.deepLink)
         XCTAssertNil(attrs.ctaText)
         XCTAssertNil(attrs.ctaDeepLink)
+        XCTAssertTrue(attrs.actions.isEmpty)
     }
     
     // LiveActivityEventType Tests
@@ -520,7 +681,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(result.attributes.awayTeamName, "Dortmund")
         XCTAssertEqual(result.attributes.homeTeamBadgeUrl, "https://cdn.ppg.com/h.png")
         XCTAssertEqual(result.attributes.awayTeamBadgeUrl, "https://cdn.ppg.com/a.png")
-        XCTAssertNotNil(result.attributes.configuration)
+        XCTAssertEqual(result.attributes.type, .footballMatchTracking)
         
         // First URL action promoted to CTA
         XCTAssertEqual(result.attributes.ctaText, "Statystyki")
@@ -540,16 +701,20 @@ final class PPG_LiveActivitiesTests: XCTestCase {
     }
     
     @available(iOS 17.2, *)
-    func testMatchActivityAttributesWithoutConfigurationFallbacks() {
-        let attrs = MatchActivityAttributes(
-            matchId: "m1",
+    func testMatchActivityAttributesEmptyLabelsAndBackgroundsFallbacks() {
+        let attrs = makeAttributes(
+            notificationId: "m1",
             homeTeamName: "A",
-            awayTeamName: "B"
+            awayTeamName: "B",
+            title: "",
+            statusLabels: [:],
+            actions: []
         )
         
-        // No config → helpers fall back to defaults
-        XCTAssertNil(attrs.background(for: .firstHalf))
+        // No statusLabels → fall back to MatchPhase.displayText
         XCTAssertEqual(attrs.label(for: .firstHalf), MatchPhase.firstHalf.displayText)
+        // No statusBackgrounds → nil (widgets use default)
+        XCTAssertNil(attrs.background(for: .firstHalf))
         XCTAssertTrue(attrs.actions.isEmpty)
         XCTAssertEqual(attrs.title, "")
     }

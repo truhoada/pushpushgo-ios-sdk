@@ -13,38 +13,29 @@ import ActivityKit
 @available(iOS 17.2, *)
 public struct MatchActivityAttributes: ActivityAttributes {
     
-    // Static Properties (set at creation, never change)
+    // Static Properties — flat mirror of the backend `attributes` payload.
+    // Layout matches `PPGFootballMatchConfiguration` + `notificationId`
     
-    /// Unique identifier for the match event on PPG backend
-    public let matchId: String
+    /// PPG Live Notification identifier (campaign id).
+    public let notificationId: String
     
-    /// Home team display name
-    public let homeTeamName: String
+    /// Template discriminator (always `.footballMatchTracking` on the wire).
+    public let type: PPGLiveActivityTemplate
     
-    /// Away team display name
-    public let awayTeamName: String
+    /// Static content (title, team names, badge image URLs).
+    public let content: PPGFootballMatchContent
     
-    /// URL string for the home team badge/crest image
-    public let homeTeamBadgeUrl: String?
+    /// Per-platform design (status backgrounds, progress bar colors).
+    public let design: PPGFootballMatchDesign
     
-    /// URL string for the away team badge/crest image
-    public let awayTeamBadgeUrl: String?
+    /// Per-status display labels. Keys are raw `MatchPhase` values.
+    public let statusLabels: [String: String]
     
-    /// Deep link URL to the match detail screen in the host app
-    public let deepLink: String?
+    /// Backend-defined CTA actions (URL / open app / close).
+    public let actions: [PPGLiveActivityAction]
     
-    /// Call-to-action button text (e.g. "Statistics", "Watch Live")
-    public let ctaText: String?
-    
-    /// Call-to-action deep link URL
-    public let ctaDeepLink: String?
-    
-    /// Backend-provided PPG Live Notification identifier (campaign id).
-    /// Present when this Activity was created from a `PPGLiveNotificationDTO`.
-    public let notificationId: String?
-    
-    /// Full backend-driven configuration (status colors, labels, actions, timeout).
-    public let configuration: PPGFootballMatchConfiguration?
+    /// Maximum activity lifetime hint.
+    public let timeout: PPGLiveActivityTimeout
     
     // ContentState (dynamic, updated in real-time)
     
@@ -64,18 +55,26 @@ public struct MatchActivityAttributes: ActivityAttributes {
         /// Optional start date for countdown timer (e.g. before kickoff)
         public let startDate: Date?
         
+        /// Optional transient hot message (e.g. "Goal cancelled after VAR").
+        /// When set, the widget renders it for `durationSeconds` after the
+        /// first render on the device, then auto-hides. Set to `nil` by the
+        /// backend to clear it early.
+        public let hotMessage: PPGHotMessage?
+        
         public init(
             homeScore: Int,
             awayScore: Int,
             matchPhase: String,
             matchMinute: String,
-            startDate: Date? = nil
+            startDate: Date? = nil,
+            hotMessage: PPGHotMessage? = nil
         ) {
             self.homeScore = homeScore
             self.awayScore = awayScore
             self.matchPhase = matchPhase
             self.matchMinute = matchMinute
             self.startDate = startDate
+            self.hotMessage = hotMessage
         }
         
         /// Convenience initializer using the type-safe MatchPhase enum
@@ -84,13 +83,15 @@ public struct MatchActivityAttributes: ActivityAttributes {
             awayScore: Int,
             phase: MatchPhase,
             matchMinute: String,
-            startDate: Date? = nil
+            startDate: Date? = nil,
+            hotMessage: PPGHotMessage? = nil
         ) {
             self.homeScore = homeScore
             self.awayScore = awayScore
             self.matchPhase = phase.rawValue
             self.matchMinute = matchMinute
             self.startDate = startDate
+            self.hotMessage = hotMessage
         }
         
         /// Parsed MatchPhase from the raw string
@@ -117,27 +118,75 @@ public struct MatchActivityAttributes: ActivityAttributes {
     // Initializer
     
     public init(
-        matchId: String,
-        homeTeamName: String,
-        awayTeamName: String,
-        homeTeamBadgeUrl: String? = nil,
-        awayTeamBadgeUrl: String? = nil,
-        deepLink: String? = nil,
-        ctaText: String? = nil,
-        ctaDeepLink: String? = nil,
-        notificationId: String? = nil,
-        configuration: PPGFootballMatchConfiguration? = nil
+        notificationId: String,
+        type: PPGLiveActivityTemplate = .footballMatchTracking,
+        content: PPGFootballMatchContent,
+        design: PPGFootballMatchDesign,
+        statusLabels: [String: String] = [:],
+        actions: [PPGLiveActivityAction] = [],
+        timeout: PPGLiveActivityTimeout
     ) {
-        self.matchId = matchId
-        self.homeTeamName = homeTeamName
-        self.awayTeamName = awayTeamName
-        self.homeTeamBadgeUrl = homeTeamBadgeUrl
-        self.awayTeamBadgeUrl = awayTeamBadgeUrl
-        self.deepLink = deepLink
-        self.ctaText = ctaText
-        self.ctaDeepLink = ctaDeepLink
         self.notificationId = notificationId
-        self.configuration = configuration
+        self.type = type
+        self.content = content
+        self.design = design
+        self.statusLabels = statusLabels
+        self.actions = actions
+        self.timeout = timeout
+    }
+    
+    // View-facing computed properties.
+    // Widget views read these instead of reaching into nested `content`.
+    
+    /// Alias for `notificationId` — stable id of the match.
+    public var matchId: String { notificationId }
+    
+    /// Home team display name (from `content`).
+    public var homeTeamName: String { content.homeTeamName }
+    
+    /// Away team display name (from `content`).
+    public var awayTeamName: String { content.awayTeamName }
+    
+    /// URL string for the home team badge image.
+    public var homeTeamBadgeUrl: String? { content.homeTeamImage }
+    
+    /// URL string for the away team badge image.
+    public var awayTeamBadgeUrl: String? { content.awayTeamImage }
+    
+    /// Title shown in the header of the Live Activity.
+    public var title: String { content.title }
+    
+    /// Deep link to the match detail screen.
+    /// Currently not part of backend payload; reserved for future use.
+    public var deepLink: String? { nil }
+    
+    /// Convenience CTA text — first URL action's name, if any.
+    public var ctaText: String? { firstUrlAction?.name }
+    
+    /// Convenience CTA deep link — first URL action's url, if any.
+    public var ctaDeepLink: String? { firstUrlAction?.url }
+    
+    private var firstUrlAction: (name: String, url: String)? {
+        actions.compactMap { action -> (String, String)? in
+            if case .url(let name, let url, _) = action { return (name, url) }
+            return nil
+        }.first
+    }
+    
+    // Config-aware lookup helpers
+    
+    /// Background color set for the given match status, taken from backend
+    /// design. Falls back to `OTHER` and then to `nil` if no entry is defined.
+    public func background(for status: MatchPhase) -> PPGColorSet? {
+        design.ios.background(for: status)
+    }
+    
+    /// Display label for the given match status. Falls back to
+    /// `MatchPhase.displayText` when no override is provided by the backend.
+    public func label(for status: MatchPhase) -> String {
+        statusLabels[status.rawValue]
+            ?? statusLabels[MatchPhase.other.rawValue]
+            ?? status.displayText
     }
     
     // Backend DTO mapping
@@ -157,24 +206,14 @@ public struct MatchActivityAttributes: ActivityAttributes {
             return nil
         }
         
-        // First URL action is promoted to the built-in CTA slot for backward
-        // compatibility with older widgets that only render a single CTA.
-        let firstUrlAction: (name: String, url: String)? = config.actions.compactMap { action -> (String, String)? in
-            if case .url(let name, let url, _) = action { return (name, url) }
-            return nil
-        }.first
-        
         let attributes = MatchActivityAttributes(
-            matchId: dto.id,
-            homeTeamName: config.content.homeTeamName,
-            awayTeamName: config.content.awayTeamName,
-            homeTeamBadgeUrl: config.content.homeTeamImage,
-            awayTeamBadgeUrl: config.content.awayTeamImage,
-            deepLink: nil,
-            ctaText: firstUrlAction?.name,
-            ctaDeepLink: firstUrlAction?.url,
             notificationId: dto.id,
-            configuration: config
+            type: config.type,
+            content: config.content,
+            design: config.design,
+            statusLabels: config.statusLabels,
+            actions: config.actions,
+            timeout: config.timeout
         )
         
         let state = ContentState(
@@ -186,27 +225,5 @@ public struct MatchActivityAttributes: ActivityAttributes {
         )
         
         return (attributes, state)
-    }
-    
-    // Config-aware convenience helpers
-    
-    /// Background color set for the given match status.
-    public func background(for status: MatchPhase) -> PPGColorSet? {
-        configuration?.background(for: status)
-    }
-    
-    /// Display label for the given match status.
-    public func label(for status: MatchPhase) -> String {
-        configuration?.label(for: status) ?? status.displayText
-    }
-    
-    /// All backend-defined actions (URL / open app / close) for this activity.
-    public var actions: [PPGLiveActivityAction] {
-        configuration?.actions ?? []
-    }
-    
-    /// Title shown in the header of the Live Activity.
-    public var title: String {
-        configuration?.content.title ?? ""
     }
 }
