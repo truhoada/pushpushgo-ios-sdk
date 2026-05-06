@@ -784,6 +784,64 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertNil(attrs.awayTeamBadgeUrl)
     }
     
+    // Countdown propagation
+    
+    @available(iOS 17.2, *)
+    func testCountdownPropagatedFromDTO() {
+        let countdown = PPGLiveActivityCountdown(
+            message: "Mecz rozpoczyna się za",
+            seconds: 900
+        )
+        let config = PPGFootballMatchConfiguration(
+            content: PPGFootballMatchContent(
+                title: "Bundesliga",
+                homeTeamName: "Bayern",
+                homeTeamImage: nil,
+                awayTeamName: "Dortmund",
+                awayTeamImage: nil
+            ),
+            design: PPGFootballMatchDesign(
+                android: PPGFootballMatchAndroidDesign(
+                    hasTrackerIcon: false,
+                    progressBarColor: PPGBasicColorSet("#000"),
+                    breakTimeBarColor: nil
+                ),
+                ios: PPGFootballMatchIOSDesign(statusBackgrounds: nil)
+            ),
+            statusLabels: [:],
+            actions: [],
+            timeout: PPGLiveActivityTimeout(minutes: 180)
+        )
+        let dto = PPGLiveNotificationDTO(
+            id: "la_cd_1",
+            projectId: "p",
+            template: .footballMatchTracking,
+            name: "x",
+            configuration: .footballMatchTracking(config),
+            liveData: .footballMatchTracking(PPGFootballMatchLiveData(
+                homeTeamScore: 0,
+                awayTeamScore: 0,
+                status: .preMatch
+            )),
+            lifecycle: PPGLiveNotificationLifecycle(status: .pending),
+            startPolicy: PPGLiveActivityStartPolicy(
+                scheduledAt: Date(timeIntervalSinceNow: 900),
+                countdown: countdown
+            ),
+            metadata: PPGLiveNotificationMetadata(createdBy: "u"),
+            createdAt: Date(),
+            updatedAt: Date(),
+            deletedAt: nil
+        )
+        
+        guard let result = MatchActivityAttributes.from(dto: dto) else {
+            XCTFail("Expected mapping to succeed")
+            return
+        }
+        XCTAssertEqual(result.attributes.countdown?.message, "Mecz rozpoczyna się za")
+        XCTAssertEqual(result.attributes.countdown?.seconds, 900)
+    }
+    
     // Optional matchMinute
     
     @available(iOS 17.2, *)

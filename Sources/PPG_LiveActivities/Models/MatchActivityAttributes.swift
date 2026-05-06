@@ -37,6 +37,12 @@ public struct MatchActivityAttributes: ActivityAttributes {
     /// Maximum activity lifetime hint.
     public let timeout: PPGLiveActivityTimeout
     
+    /// Optional pre-match countdown configuration. When present and the
+    /// activity is in `.preMatch` phase with a `startDate` in the future,
+    /// the widget renders `countdown.message` next to a live timer that ticks
+    /// down to `startDate`.
+    public let countdown: PPGLiveActivityCountdown?
+    
     // ContentState (dynamic, updated in real-time)
     
     public struct ContentState: Codable, Hashable {
@@ -126,7 +132,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
         design: PPGFootballMatchDesign,
         statusLabels: [String: String] = [:],
         actions: [PPGLiveActivityAction] = [],
-        timeout: PPGLiveActivityTimeout
+        timeout: PPGLiveActivityTimeout,
+        countdown: PPGLiveActivityCountdown? = nil
     ) {
         self.notificationId = notificationId
         self.type = type
@@ -135,6 +142,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
         self.statusLabels = statusLabels
         self.actions = actions
         self.timeout = timeout
+        self.countdown = countdown
     }
     
     // View-facing computed properties.
@@ -230,7 +238,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
             design: config.design,
             statusLabels: config.statusLabels,
             actions: config.actions,
-            timeout: config.timeout
+            timeout: config.timeout,
+            countdown: dto.startPolicy.countdown
         )
         
         let state = ContentState(

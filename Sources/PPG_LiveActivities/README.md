@@ -32,27 +32,37 @@ pod install
 
 ## Quick Start
 
-### Step 1: Initialize the SDK
+### Step 1: Configure App Group (required)
+
+The Widget Extension runs in a separate process and cannot share memory with
+your app. Team badges and hot-message state are persisted in a shared
+App Group container.
+
+1. Apple Developer portal → enable an App Group on **both** your app's bundle id
+   and your widget extension bundle id (e.g. `group.com.your.app.liveactivities`).
+2. Xcode → both targets → Signing & Capabilities → **+ Capability → App Groups**
+   and tick the same group.
+3. Use that exact id in the SDK init below and in the Widget Extension setup.
+
+### Step 2: Initialize the SDK
 
 ```swift
 import PPG_LiveActivities
 
-// In your App init or AppDelegate
+// In AppDelegate.application(_:didFinishLaunchingWithOptions:) or App init
 LiveActivitiesSDK.shared.initialize(
     apiKey: "YOUR_API_KEY",
-    projectId: "YOUR_PROJECT_ID"
+    projectId: "YOUR_PROJECT_ID",
+    appGroupId: "group.com.your.app.liveactivities" // example
 )
 ```
 
-### Step 2: Add a Widget Extension
+### Step 3: Add a Widget Extension
 
-1. In Xcode: File → New → Target → Widget Extension
-2. Name it (e.g., `MatchLiveActivityWidget`)
-3. Add `PPG_LiveActivities` as a dependency for the Widget Extension target
-
-### Step 3: Use the Pre-Built Match Template
-
-In your Widget Extension:
+1. Xcode → File → New → Target → **Widget Extension**.
+2. Add `PPG_LiveActivities` as a dependency for the widget target.
+3. Inside the widget bundle's `init`, point the image manager at the same
+   App Group so cached badges become visible to widget views:
 
 ```swift
 import WidgetKit
@@ -61,40 +71,44 @@ import PPG_LiveActivities
 
 @main
 struct MatchLiveActivityWidget: Widget {
+    init() {
+        LiveActivityImageManager.shared.configure(
+            appGroupId: "group.com.your.app.liveactivities"
+        )
+    }
+
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: MatchActivityAttributes.self) { context in
-            // Lock Screen view
+            // Lock Screen
             PPGMatchLockScreenView(context: context)
         } dynamicIsland: { context in
-            // Dynamic Island view
+            // Dynamic Island
             PPGMatchDynamicIsland(context: context).body()
         }
     }
 }
 ```
 
-### Step 4: Start a Match Activity
+### Step 4: Start a Match Activity from a backend payload (recommended)
+
+In production the activity is driven by the PPG backend. Decode the
+`PPGLiveNotificationDTO` from your in-app event / push and use the
+`from(dto:)` factory — it builds both the static attributes and the initial
+`ContentState` in one shot:
 
 ```swift
-let attributes = MatchActivityAttributes(
-    matchId: "match-2026-final",
-    homeTeamName: "Brazil",
-    awayTeamName: "Germany",
-    homeTeamBadgeUrl: "https://example.com/brazil.png",
-    awayTeamBadgeUrl: "https://example.com/germany.png",
-    deepLink: "myapp://match/2026-final",
-    ctaText: "Statistics",
-    ctaDeepLink: "myapp://match/2026-final/stats"
-)
+let dto = try JSONDecoder().decode(PPGLiveNotificationDTO.self, from: jsonData)
 
-let initialState = MatchActivityAttributes.ContentState(
-    homeScore: 0,
-    awayScore: 0,
-    phase: .preMatch,
-    matchMinute: "0"
-)
+guard let (attributes, initialState) = MatchActivityAttributes.from(dto: dto) else {
+    return  // not a football-match template
+}
 
-// Start — the generic API works with any ActivityAttributes type
+// Prefetch team badges into the App Group so the widget can render them.
+await LiveActivityImageManager.shared.prefetch(from: [
+    attributes.homeTeamBadgeUrl,
+    attributes.awayTeamBadgeUrl
+].compactMap { $0 })
+
 let activityId = LiveActivitiesSDK.shared.startActivity(
     attributes: attributes,
     initialState: initialState,
@@ -103,6 +117,9 @@ let activityId = LiveActivitiesSDK.shared.startActivity(
 ```
 
 ### Step 5: Update During the Match
+
+`matchMinute` is optional — leave it `nil` before kickoff or at full-time and
+the widget will hide the live-minute badge.
 
 ```swift
 LiveActivitiesSDK.shared.updateActivity(
@@ -127,9 +144,35 @@ LiveActivitiesSDK.shared.endActivity(
         homeScore: 2,
         awayScore: 1,
         phase: .matchEnded,
-        matchMinute: "90+5"
+        matchMinute: nil
     ),
     dismissPolicy: .default  // Stays on Lock Screen for ~4 hours
+)
+```
+
+## Hot Messages
+
+`ContentState.hotMessage` renders a transient banner in the Lock Screen and
+Dynamic Island (taking priority over the CTA). It auto-hides after
+`durationSeconds` using a deterministic timeline, and per-activity timestamps
+are persisted in the App Group so the countdown survives widget refreshes.
+Set `hotMessage` back to `nil` in a follow-up `update` to clear it early.
+
+```swift
+LiveActivitiesSDK.shared.updateActivity(
+    MatchActivityAttributes.self,
+    activityId: activityId!,
+    state: MatchActivityAttributes.ContentState(
+        homeScore: 1,
+        awayScore: 0,
+        phase: .firstHalf,
+        matchMinute: "45+2",
+        hotMessage: PPGHotMessage(
+            id: "var-cancelled-1",
+            text: "Goal cancelled after VAR",
+            durationSeconds: 5
+        )
+    )
 )
 ```
 
@@ -189,10 +232,15 @@ The SDK provides a complete `MatchPhase` enum with all football match states:
 | `SECOND_HALF` | 2nd Half | Playing |
 | `SECOND_HALF_ADDED_TIME` | 2nd Half +AT | Playing |
 | `FULL_TIME` | Full Time | Finished |
+| `EXTRA_TIME_BREAK` | ET Break | Break |
 | `EXTRA_TIME_FIRST_HALF` | ET 1st Half | Playing |
+| `EXTRA_TIME_FIRST_HALF_ADDED_TIME` | ET 1st Half +AT | Playing |
+| `EXTRA_TIME_HALF_TIME_BREAK` | ET Half Time | Break |
 | `EXTRA_TIME_SECOND_HALF` | ET 2nd Half | Playing |
+| `EXTRA_TIME_SECOND_HALF_ADDED_TIME` | ET 2nd Half +AT | Playing |
 | `PENALTY_SHOOTOUT` | Penalties | Playing |
 | `MATCH_ENDED` | Match Ended | Finished |
+| `OTHER` | — | Fallback / unknown |
 
 ## Observer API (Recommended for Production)
 
@@ -293,7 +341,13 @@ Control when ended activities are removed from the Lock Screen:
 
 ```swift
 // Initialize SDK
-initialize(apiKey: String, projectId: String, isProduction: Bool, isDebug: Bool)
+initialize(
+    apiKey: String,
+    projectId: String,
+    appGroupId: String,
+    isProduction: Bool = true,
+    isDebug: Bool = false
+)
 
 // Check availability
 areActivitiesEnabled() -> Bool

@@ -163,10 +163,21 @@ public struct PPGMatchLockScreenView: View {
             // Countdown timer for pre-match
             if let phase = phase, phase == .preMatch,
                let startDate = context.state.startDate {
-                Text(startDate, style: .timer)
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 2) {
+                    if let message = context.attributes.countdown?.message,
+                       !message.isEmpty {
+                        Text(message)
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.6))
+                            .multilineTextAlignment(.center)
+                    }
+                    Text(startDate, style: .timer)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white.opacity(0.8))
+                        .monospacedDigit()
+                        .multilineTextAlignment(.center)
+                }
             }
             
             // CTA button

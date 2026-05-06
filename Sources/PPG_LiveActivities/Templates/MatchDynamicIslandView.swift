@@ -117,6 +117,23 @@ public struct PPGMatchDynamicIsland {
                         .foregroundColor(phase.color)
                 }
             }
+            
+            // Pre-match countdown — message + live timer
+            if phase == .preMatch, let startDate = context.state.startDate {
+                if let message = context.attributes.countdown?.message,
+                   !message.isEmpty {
+                    Text(message)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                Text(startDate, style: .timer)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .foregroundColor(.primary)
+                    .multilineTextAlignment(.center)
+            }
         }
     }
     
