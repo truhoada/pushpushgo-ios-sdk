@@ -100,12 +100,12 @@ public struct PPGMatchDynamicIsland {
         VStack(spacing: 2) {
             if let phase = phase {
                 HStack(spacing: 4) {
-                    if phase.isPlaying {
+                    if phase.isPlaying, let minute = context.state.matchMinute, !minute.isEmpty {
                         Circle()
                             .fill(Color.green)
                             .frame(width: 5, height: 5)
                         
-                        Text("\(context.state.matchMinute)'")
+                        Text("\(minute)'")
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .foregroundColor(.green)
@@ -165,11 +165,12 @@ public struct PPGMatchDynamicIsland {
     
     private var compactTrailing: some View {
         HStack(spacing: 3) {
-            if let phase = phase, phase.isPlaying {
+            if let phase = phase, phase.isPlaying,
+               let minute = context.state.matchMinute, !minute.isEmpty {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 5, height: 5)
-                Text("\(context.state.matchMinute)'")
+                Text("\(minute)'")
                     .font(.caption2)
                     .fontWeight(.semibold)
                     .foregroundColor(.green)

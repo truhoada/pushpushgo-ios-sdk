@@ -38,16 +38,16 @@ public struct PPGFootballMatchLiveData: Codable, Sendable, Hashable {
 public struct PPGFootballMatchContent: Codable, Sendable, Hashable {
     public let title: String
     public let homeTeamName: String
-    public let homeTeamImage: String   // remote URL
+    public let homeTeamImage: String?
     public let awayTeamName: String
-    public let awayTeamImage: String   // remote URL
+    public let awayTeamImage: String?
     
     public init(
         title: String,
         homeTeamName: String,
-        homeTeamImage: String,
+        homeTeamImage: String?,
         awayTeamName: String,
-        awayTeamImage: String
+        awayTeamImage: String?
     ) {
         self.title = title
         self.homeTeamName = homeTeamName

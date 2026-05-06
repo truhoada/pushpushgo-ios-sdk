@@ -49,8 +49,10 @@ public struct MatchActivityAttributes: ActivityAttributes {
         /// Current match phase raw value (maps to MatchPhase enum)
         public let matchPhase: String
         
-        /// Current match minute display string (e.g. "45", "45+2", "90+5")
-        public let matchMinute: String
+        /// Current match minute display string (e.g. "45", "45+2", "90+5").
+        /// Optional — backend may omit it when it's not meaningful
+        /// (e.g. before kickoff or at full-time).
+        public let matchMinute: String?
         
         /// Optional start date for countdown timer (e.g. before kickoff)
         public let startDate: Date?
@@ -65,7 +67,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             homeScore: Int,
             awayScore: Int,
             matchPhase: String,
-            matchMinute: String,
+            matchMinute: String? = nil,
             startDate: Date? = nil,
             hotMessage: PPGHotMessage? = nil
         ) {
@@ -82,7 +84,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             homeScore: Int,
             awayScore: Int,
             phase: MatchPhase,
-            matchMinute: String,
+            matchMinute: String? = nil,
             startDate: Date? = nil,
             hotMessage: PPGHotMessage? = nil
         ) {
@@ -148,10 +150,25 @@ public struct MatchActivityAttributes: ActivityAttributes {
     public var awayTeamName: String { content.awayTeamName }
     
     /// URL string for the home team badge image.
-    public var homeTeamBadgeUrl: String? { content.homeTeamImage }
+    /// Empty string from backend is normalized to `nil` (no image).
+    public var homeTeamBadgeUrl: String? {
+        Self.nonEmpty(content.homeTeamImage)
+    }
     
     /// URL string for the away team badge image.
-    public var awayTeamBadgeUrl: String? { content.awayTeamImage }
+    /// Empty string from backend is normalized to `nil` (no image).
+    public var awayTeamBadgeUrl: String? {
+        Self.nonEmpty(content.awayTeamImage)
+    }
+    
+    /// Returns `value` if it's non-empty after trimming, otherwise `nil`.
+    /// Backend uses empty strings as a sentinel for "no image".
+    private static func nonEmpty(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return value
+    }
     
     /// Title shown in the header of the Live Activity.
     public var title: String { content.title }
@@ -220,7 +237,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             homeScore: liveData.homeTeamScore,
             awayScore: liveData.awayTeamScore,
             phase: liveData.status,
-            matchMinute: "",
+            matchMinute: nil,
             startDate: dto.startPolicy.scheduledAt
         )
         

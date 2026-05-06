@@ -719,6 +719,83 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(attrs.title, "")
     }
     
+    // Presence-based color decoding (no `type` discriminator)
+    
+    @available(iOS 17.2, *)
+    func testPPGColorBasicWithoutTypeDiscriminator() throws {
+        let json = "{\"hex\":\"#AABBCC\"}".data(using: .utf8)!
+        let color = try JSONDecoder().decode(PPGColor.self, from: json)
+        guard case .basic(let hex) = color else {
+            XCTFail("Expected .basic")
+            return
+        }
+        XCTAssertEqual(hex, "#AABBCC")
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGColorGradientWithoutTypeDiscriminator() throws {
+        let json = """
+        {"fromHex":"#000","toHex":"#FFF","direction":"TOP_TO_BOTTOM"}
+        """.data(using: .utf8)!
+        let color = try JSONDecoder().decode(PPGColor.self, from: json)
+        guard case .gradient(let from, let to, let dir) = color else {
+            XCTFail("Expected .gradient")
+            return
+        }
+        XCTAssertEqual(from, "#000")
+        XCTAssertEqual(to, "#FFF")
+        XCTAssertEqual(dir, .topToBottom)
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGColorGradientDefaultsDirectionWhenMissing() throws {
+        // Direction is optional; default top-to-bottom.
+        let json = "{\"fromHex\":\"#000\",\"toHex\":\"#FFF\"}".data(using: .utf8)!
+        let color = try JSONDecoder().decode(PPGColor.self, from: json)
+        guard case .gradient(_, _, let dir) = color else {
+            XCTFail("Expected .gradient")
+            return
+        }
+        XCTAssertEqual(dir, .topToBottom)
+    }
+    
+    @available(iOS 17.2, *)
+    func testPPGBasicColorSetWithoutTypeDiscriminator() throws {
+        let json = """
+        { "lightMode": {"hex":"#FFFFFF"}, "darkMode": {"hex":"#000000"} }
+        """.data(using: .utf8)!
+        let set = try JSONDecoder().decode(PPGBasicColorSet.self, from: json)
+        XCTAssertEqual(set.lightMode, "#FFFFFF")
+        XCTAssertEqual(set.darkMode, "#000000")
+    }
+    
+    // Empty-string image URL → nil (no image)
+    
+    @available(iOS 17.2, *)
+    func testEmptyBadgeImageUrlNormalizedToNil() {
+        let attrs = makeAttributes(
+            notificationId: "m-empty",
+            homeTeamName: "A",
+            awayTeamName: "B",
+            homeTeamImage: "",
+            awayTeamImage: "   "
+        )
+        XCTAssertNil(attrs.homeTeamBadgeUrl)
+        XCTAssertNil(attrs.awayTeamBadgeUrl)
+    }
+    
+    // Optional matchMinute
+    
+    @available(iOS 17.2, *)
+    func testContentStateDecodesWithoutMatchMinute() throws {
+        let json = """
+        {"homeScore":0,"awayScore":0,"matchPhase":"PRE_MATCH"}
+        """.data(using: .utf8)!
+        let state = try JSONDecoder().decode(MatchActivityAttributes.ContentState.self, from: json)
+        XCTAssertNil(state.matchMinute)
+        XCTAssertEqual(state.phase, .preMatch)
+    }
+    
     @available(iOS 17.2, *)
     func testPPGFootballMatchConfigurationLookupHelpers() {
         let content = PPGFootballMatchContent(

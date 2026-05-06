@@ -41,7 +41,8 @@ public enum PPGColor: Codable, Sendable, Hashable {
     case basic(hex: String)
     case gradient(fromHex: String, toHex: String, direction: PPGGradientDirection)
     
-    // Codable — matches backend discriminated union on `type`
+    // Codable — backend sends either `{hex}` (basic) or
+    // `{fromHex, toHex, direction}` (gradient).
     
     private enum CodingKeys: String, CodingKey {
         case type, hex, fromHex, toHex, direction
@@ -54,27 +55,47 @@ public enum PPGColor: Codable, Sendable, Hashable {
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let kind = try container.decode(Kind.self, forKey: .type)
-        switch kind {
-        case .basic:
-            let hex = try container.decode(String.self, forKey: .hex)
-            self = .basic(hex: hex)
-        case .gradient:
+        
+        // Prefer explicit discriminator when present (future-proof).
+        let kind = try container.decodeIfPresent(Kind.self, forKey: .type)
+        
+        // Gradient: either type == GRADIENT or gradient fields present.
+        let hasGradientFields = container.contains(.fromHex)
+            && container.contains(.toHex)
+        
+        if kind == .gradient || hasGradientFields {
             let from = try container.decode(String.self, forKey: .fromHex)
             let to = try container.decode(String.self, forKey: .toHex)
-            let dir = try container.decode(PPGGradientDirection.self, forKey: .direction)
+            // direction is optional; default to top→bottom
+            let dir = try container.decodeIfPresent(
+                PPGGradientDirection.self, forKey: .direction
+            ) ?? .topToBottom
             self = .gradient(fromHex: from, toHex: to, direction: dir)
+            return
         }
+        
+        // Basic: presence of `hex`.
+        if container.contains(.hex) {
+            let hex = try container.decode(String.self, forKey: .hex)
+            self = .basic(hex: hex)
+            return
+        }
+        
+        throw DecodingError.dataCorrupted(
+            .init(
+                codingPath: decoder.codingPath,
+                debugDescription:
+                    "PPGColor: expected either `hex` (basic) or `fromHex`/`toHex` (gradient) fields."
+            )
+        )
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         switch self {
         case .basic(let hex):
-            try container.encode(Kind.basic, forKey: .type)
             try container.encode(hex, forKey: .hex)
         case .gradient(let from, let to, let dir):
-            try container.encode(Kind.gradient, forKey: .type)
             try container.encode(from, forKey: .fromHex)
             try container.encode(to, forKey: .toHex)
             try container.encode(dir, forKey: .direction)
@@ -126,29 +147,36 @@ public struct PPGBasicColorSet: Codable, Sendable, Hashable {
         scheme == .dark ? darkMode : lightMode
     }
     
-    // Codable — backend wraps hex in { type: "BASIC", hex: "..." }
-    
     private enum CodingKeys: String, CodingKey {
         case lightMode, darkMode
     }
     
     private struct BasicColorPayload: Codable {
-        let type: String
+        let type: String?
         let hex: String
+    }
+    
+    private static func decodeHex(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> String {
+        if let raw = try? container.decode(String.self, forKey: key) {
+            return raw
+        }
+        let nested = try container.decode(BasicColorPayload.self, forKey: key)
+        return nested.hex
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let light = try container.decode(BasicColorPayload.self, forKey: .lightMode)
-        let dark = try container.decode(BasicColorPayload.self, forKey: .darkMode)
-        self.lightMode = light.hex
-        self.darkMode = dark.hex
+        self.lightMode = try Self.decodeHex(from: container, forKey: .lightMode)
+        self.darkMode = try Self.decodeHex(from: container, forKey: .darkMode)
     }
     
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(BasicColorPayload(type: "BASIC", hex: lightMode), forKey: .lightMode)
-        try container.encode(BasicColorPayload(type: "BASIC", hex: darkMode), forKey: .darkMode)
+        try container.encode(BasicColorPayload(type: nil, hex: lightMode), forKey: .lightMode)
+        try container.encode(BasicColorPayload(type: nil, hex: darkMode), forKey: .darkMode)
     }
 }
 

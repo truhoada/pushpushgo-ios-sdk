@@ -141,13 +141,13 @@ public struct PPGMatchLockScreenView: View {
             // Phase + Minute
             HStack(spacing: 4) {
                 if let phase = phase {
-                    if phase.isPlaying {
+                    if phase.isPlaying, let minute = context.state.matchMinute, !minute.isEmpty {
                         // Show pulsing dot for live match
                         Circle()
                             .fill(Color.green)
                             .frame(width: 6, height: 6)
                         
-                        Text("\(context.state.matchMinute)'")
+                        Text("\(minute)'")
                             .font(.caption)
                             .fontWeight(.semibold)
                             .foregroundColor(.green)
