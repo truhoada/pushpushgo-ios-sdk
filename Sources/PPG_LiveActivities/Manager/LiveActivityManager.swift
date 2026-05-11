@@ -14,6 +14,7 @@ internal class LiveActivityManager {
     private let repository: LiveActivityRepository
     private var activeActivities: [String: LiveActivityInfo] = [:]
     private var tokenObservationTasks: [String: Task<Void, Never>] = [:]
+    private var hotMessageClearTasks: [String: Task<Void, Never>] = [:]
     private static let persistenceKey = "PPGLiveActivities_Active"
     
     init(repository: LiveActivityRepository) {
@@ -53,6 +54,7 @@ internal class LiveActivityManager {
             persistActiveActivities()
             
             observePushTokenUpdates(for: activity, templateId: templateId)
+            scheduleHotMessageAutoClear(T.self, activityId: activityId, state: initialState)
             trackEvent(.started, activityId: activityId, templateId: templateId)
             
             return activityId
@@ -79,6 +81,7 @@ internal class LiveActivityManager {
         
         let templateId = activeActivities[activityId]?.templateId ?? "unknown"
         LiveActivityLogger.shared.debug("Activity updated [\(templateId)]: \(activityId)")
+        scheduleHotMessageAutoClear(T.self, activityId: activityId, state: state)
         trackEvent(.updated, activityId: activityId, templateId: templateId)
     }
     
@@ -258,8 +261,75 @@ internal class LiveActivityManager {
         activeActivities.removeValue(forKey: activityId)
         tokenObservationTasks[activityId]?.cancel()
         tokenObservationTasks.removeValue(forKey: activityId)
+        hotMessageClearTasks[activityId]?.cancel()
+        hotMessageClearTasks.removeValue(forKey: activityId)
         HotMessageStore.shared.clear(activityID: activityId)
         persistActiveActivities()
+    }
+    
+    // Hot message auto-clear
+    
+    /// Schedule a deterministic follow-up `Activity.update` that drops
+    /// `hotMessage` from the content state at `receivedAt + durationSeconds`.
+    ///
+    /// This is the authoritative path for hiding hot messages — relying on
+    /// `TimelineView` alone is unreliable for sub-minute windows because the
+    /// system defers widget render budget. Every call cancels the previous
+    /// pending clear for this activity so backend-initiated updates take
+    /// precedence (option "backend wins"): a fresh `hotMessage` reschedules,
+    /// `hotMessage = nil` simply cancels.
+    private func scheduleHotMessageAutoClear<T: ActivityAttributes>(
+        _ type: T.Type,
+        activityId: String,
+        state: T.ContentState
+    ) {
+        hotMessageClearTasks[activityId]?.cancel()
+        hotMessageClearTasks.removeValue(forKey: activityId)
+        
+        guard let carrier = state as? PPGHotMessageCarrying,
+              let hot = carrier.hotMessage,
+              hot.durationSeconds > 0 else { return }
+        
+        // Use HotMessageStore as the source of truth so the clear instant
+        // matches what the widget computed from the same `(activityId, hotMessageId)`.
+        let receivedAt = HotMessageStore.shared.receivedAt(
+            activityID: activityId,
+            hotMessageId: hot.id
+        )
+        let endDate = receivedAt.addingTimeInterval(TimeInterval(hot.durationSeconds))
+        let delay = max(0, endDate.timeIntervalSinceNow)
+        let nanoseconds = UInt64(delay * 1_000_000_000)
+        
+        let hotMessageId = hot.id
+        let task = Task { [weak self] in
+            if nanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: nanoseconds)
+            }
+            if Task.isCancelled { return }
+            guard let self else { return }
+            
+            // Re-find the live activity each time — it may have ended.
+            guard let activity = self.findActivity(T.self, byId: activityId) else { return }
+            
+            // If the latest content state has a different hot message id
+            // (i.e. backend already rotated to a new message), do nothing —
+            // the new message has its own scheduled clear.
+            if let currentCarrier = activity.content.state as? PPGHotMessageCarrying,
+               let currentHot = currentCarrier.hotMessage,
+               currentHot.id != hotMessageId {
+                return
+            }
+            
+            guard let currentCarrier = activity.content.state as? PPGHotMessageCarrying,
+                  let cleared = currentCarrier.clearingHotMessage() as? T.ContentState else { return }
+            
+            await activity.update(
+                ActivityContent<T.ContentState>(state: cleared, staleDate: nil)
+            )
+            LiveActivityLogger.shared.debug("Hot message auto-cleared for \(activityId)")
+        }
+        
+        hotMessageClearTasks[activityId] = task
     }
 }
 

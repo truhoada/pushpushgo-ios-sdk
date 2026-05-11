@@ -12,9 +12,15 @@ import Foundation
 ///
 /// The message is part of `ContentState` and is rendered by the widget
 /// for `durationSeconds` after the first time the widget sees this `id`.
-/// Visibility is enforced locally via SwiftUI `TimelineView` — the system
-/// automatically re-renders at `receivedAt + durationSeconds` and the
-/// message disappears deterministically without requiring a second push.
+/// Visibility is enforced via two complementary mechanisms:
+/// 1. `PPGHotMessageView` uses a SwiftUI `TimelineView` to drop the banner
+///    at `receivedAt + durationSeconds`.
+/// 2. `LiveActivityManager` schedules a follow-up `Activity.update` that
+///    clears `hotMessage` at the same instant — this is the authoritative
+///    path because Live Activity `TimelineView` updates can be deferred
+///    when the window is below the system's render budget.
+///    The auto-clear is cancelled if the host updates the activity
+///    earlier (e.g. backend pushes a new state via ActivityKit).
 @available(iOS 17.2, *)
 public struct PPGHotMessage: Codable, Sendable, Hashable {
     /// Unique identifier. A change in `id` starts a new visibility window;
@@ -33,4 +39,16 @@ public struct PPGHotMessage: Codable, Sendable, Hashable {
         self.text = text
         self.durationSeconds = durationSeconds
     }
+}
+
+/// `ContentState` types that include a `PPGHotMessage` should conform to
+/// this protocol so that `LiveActivityManager` can schedule the automatic
+/// follow-up update that clears the message after `durationSeconds`.
+///
+/// `clearingHotMessage()` must return a copy of `Self` with `hotMessage`
+/// set to `nil`; all other fields should be preserved as-is.
+@available(iOS 17.2, *)
+public protocol PPGHotMessageCarrying {
+    var hotMessage: PPGHotMessage? { get }
+    func clearingHotMessage() -> Self
 }

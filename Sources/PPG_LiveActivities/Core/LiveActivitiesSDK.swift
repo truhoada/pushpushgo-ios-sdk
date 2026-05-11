@@ -63,6 +63,24 @@ public class LiveActivitiesSDK {
         LiveActivityLogger.shared.info("LiveActivitiesSDK initialized")
     }
     
+    // Widget Extension Configuration
+    
+    /// Configure SDK stores that the widget extension process needs in order
+    /// to render Live Activities correctly. The widget runs in a separate
+    /// process and does not inherit configuration from the host app, so this
+    /// must be called from the widget's `init()`.
+    ///
+    /// Wires up:
+    /// - `LiveActivityImageManager` — shared image cache for badge URLs.
+    /// - `HotMessageStore` — persistent `receivedAt` timestamp store used to
+    ///   keep transient hot-message windows stable across widget re-renders.
+    ///
+    /// Use the same `appGroupId` you pass to `initialize(...)` in the host app.
+    public static func configureWidgetExtension(appGroupId: String) {
+        LiveActivityImageManager.shared.configure(appGroupId: appGroupId)
+        HotMessageStore.shared.configure(appGroupId: appGroupId)
+    }
+    
     // Generic Lifecycle API
     
     /// Start a Live Activity for any template.

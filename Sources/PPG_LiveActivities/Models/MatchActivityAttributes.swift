@@ -253,3 +253,19 @@ public struct MatchActivityAttributes: ActivityAttributes {
         return (attributes, state)
     }
 }
+
+// PPGHotMessageCarrying conformance enables `LiveActivityManager` to schedule
+// the deterministic auto-clear `Activity.update` after `durationSeconds`.
+@available(iOS 17.2, *)
+extension MatchActivityAttributes.ContentState: PPGHotMessageCarrying {
+    public func clearingHotMessage() -> Self {
+        Self(
+            homeScore: homeScore,
+            awayScore: awayScore,
+            matchPhase: matchPhase,
+            matchMinute: matchMinute,
+            startDate: startDate,
+            hotMessage: nil
+        )
+    }
+}

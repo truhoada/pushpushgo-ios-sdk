@@ -72,7 +72,9 @@ import PPG_LiveActivities
 @main
 struct MatchLiveActivityWidget: Widget {
     init() {
-        LiveActivityImageManager.shared.configure(
+        // The widget runs in its own process and does not inherit
+        // configuration from the host app — wire up the shared App Group.
+        LiveActivitiesSDK.configureWidgetExtension(
             appGroupId: "group.com.your.app.liveactivities"
         )
     }

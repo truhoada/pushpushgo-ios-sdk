@@ -11,7 +11,7 @@ import Foundation
 class ApiService {
     static var shared = ApiService()
 
-    let baseUrl = "https://api.pushpushgo.com"
+    let baseUrl = "https://api.master1.qappg.co"
 
     func subscribeUser(token: String, handler: @escaping (_ result: ActionResult) -> Void) {
         guard let encoded = try? JSONEncoder().encode(["token": token]) else {
