@@ -55,7 +55,6 @@ internal class LiveActivityManager {
             
             observePushTokenUpdates(for: activity, templateId: templateId)
             scheduleHotMessageAutoClear(T.self, activityId: activityId, state: initialState)
-            trackEvent(.started, activityId: activityId, templateId: templateId)
             
             return activityId
         } catch {
@@ -82,7 +81,6 @@ internal class LiveActivityManager {
         let templateId = activeActivities[activityId]?.templateId ?? "unknown"
         LiveActivityLogger.shared.debug("Activity updated [\(templateId)]: \(activityId)")
         scheduleHotMessageAutoClear(T.self, activityId: activityId, state: state)
-        trackEvent(.updated, activityId: activityId, templateId: templateId)
     }
     
     /// End any Live Activity.
@@ -106,7 +104,6 @@ internal class LiveActivityManager {
         let templateId = activeActivities[activityId]?.templateId ?? "unknown"
         cleanupActivity(activityId)
         LiveActivityLogger.shared.info("Activity ended [\(templateId)]: \(activityId)")
-        trackEvent(.ended, activityId: activityId, templateId: templateId)
     }
     
     /// End all running activities for a given `ActivityAttributes` type.
@@ -122,41 +119,87 @@ internal class LiveActivityManager {
         return Array(activeActivities.values)
     }
     
-    // Observer Management (push-to-start flow)
-    
-    private var observers: [String: Any] = [:]
-    
-    @available(iOS 17.2, *)
-    func observeCampaign<T: ActivityAttributes>(
-        _ type: T.Type,
-        campaignId: String,
-        templateId: String,
-        onStatus: @escaping @Sendable (LiveActivityObserverStatus) -> Void
-    ) {
-        // Cancel any existing observer for this campaign
-        stopObserving(campaignId: campaignId)
-        
-        let observer = LiveActivityObserver<T>(
-            repository: repository,
-            campaignId: campaignId,
+    /// Register an Activity that was created externally (via push-to-start)
+    /// into the in-memory registry so that `getActiveActivities()` reports
+    /// it. The `templateId` typically carries the `liveNotificationId` for
+    /// push-spawned activities — useful for UI inspection.
+    func registerExternalActivity(activityId: String, templateId: String) {
+        if activeActivities[activityId] != nil { return }
+        let info = LiveActivityInfo(
+            activityId: activityId,
             templateId: templateId,
-            statusHandler: onStatus
+            pushToken: nil,
+            startedAt: Date()
         )
-        observers[campaignId] = observer
-        observer.start()
-        
-        LiveActivityLogger.shared.info("Observing campaign: \(campaignId)")
+        activeActivities[activityId] = info
+        persistActiveActivities()
+        LiveActivityLogger.shared.debug(
+            "Registered push-started activity \(activityId) for \(templateId)"
+        )
     }
     
-    @available(iOS 17.2, *)
-    func stopObserving(campaignId: String) {
-        if observers.removeValue(forKey: campaignId) != nil {
-            LiveActivityLogger.shared.info("Stopped observing campaign: \(campaignId)")
+    // Live Notification Subscriber Management (per-notification flow)
+    
+    /// Active subscribers, keyed by `liveNotificationId`. Stored as `Any`
+    /// because each subscriber binds to a different `ActivityAttributes`
+    /// generic type and Swift can't store heterogeneous generics directly.
+    private var subscribers: [String: Any] = [:]
+    
+    func subscribe<T: ActivityAttributes>(
+        _ type: T.Type,
+        liveNotificationId: String,
+        onStatus: @escaping @Sendable (LiveNotificationSubscriptionStatus) -> Void
+    ) {
+
+        if subscribers[liveNotificationId] != nil {
+            LiveActivityLogger.shared.debug(
+                "Already subscribed to \(liveNotificationId); skipping re-subscribe"
+            )
+            return
+        }
+        
+        let subscriber = LiveNotificationSubscriber<T>(
+            repository: repository,
+            liveNotificationId: liveNotificationId,
+            installationId: InstallationIDStore.shared.installationId,
+            statusHandler: onStatus,
+            onActivityAppeared: { [weak self] activityId, templateId in
+                self?.registerExternalActivity(activityId: activityId, templateId: templateId)
+            },
+            onActivityTokenUpdate: { [weak self] activityId, token in
+                self?.updateStoredToken(activityId: activityId, token: token)
+            },
+            onActivityCleared: { [weak self] activityId in
+                self?.cleanupActivity(activityId)
+            },
+            onContentStateUpdated: { [weak self] activityId, state in
+                self?.scheduleHotMessageAutoClear(T.self, activityId: activityId, state: state)
+            }
+        )
+        subscribers[liveNotificationId] = subscriber
+        subscriber.start()
+        
+        LiveActivityLogger.shared.info(
+            "Subscribed to liveNotification: \(liveNotificationId)"
+        )
+    }
+    
+    func unsubscribe(liveNotificationId: String) {
+        if let any = subscribers.removeValue(forKey: liveNotificationId) {
+            // Subscriber's `cancel()` is type-erased through `Any` cast.
+            // Use a small protocol to call it without re-binding generics.
+            (any as? LiveNotificationSubscriberCancellable)?.cancel()
+            LiveActivityLogger.shared.info(
+                "Unsubscribed from liveNotification: \(liveNotificationId)"
+            )
         }
     }
     
     // Push Token Management
     
+    /// Observe `pushTokenUpdates` for a locally-started activity. We just
+    /// log + persist the token — forwarding to backend is the responsibility
+    /// of `LiveNotificationSubscriber` for activities started via push.
     private func observePushTokenUpdates<T: ActivityAttributes>(
         for activity: Activity<T>,
         templateId: String
@@ -169,24 +212,10 @@ internal class LiveActivityManager {
                 guard !Task.isCancelled, let self else { break }
                 
                 let tokenHex = tokenData.map { String(format: "%02x", $0) }.joined()
-                LiveActivityLogger.shared.debug("Push token [\(templateId)] \(activityId): \(tokenHex)")
-                
+                LiveActivityLogger.shared.debug(
+                    "Push token [\(templateId)] \(activityId): \(tokenHex)"
+                )
                 self.updateStoredToken(activityId: activityId, token: tokenHex)
-                
-                self.repository.registerPushToken(
-                    activityId: activityId,
-                    templateId: templateId,
-                    pushToken: tokenHex
-                ) { result in
-                    switch result {
-                    case .success:
-                        LiveActivityLogger.shared.info("Push token registered for \(activityId)")
-                    case .failure(let error):
-                        LiveActivityLogger.shared.error("Push token registration failed: \(error.localizedDescription)")
-                    }
-                }
-                
-                self.trackEvent(.pushTokenRegistered, activityId: activityId, templateId: templateId)
             }
         }
         
@@ -208,16 +237,6 @@ internal class LiveActivityManager {
     
     private func findActivity<T: ActivityAttributes>(_ type: T.Type, byId activityId: String) -> Activity<T>? {
         return Activity<T>.activities.first { $0.id == activityId }
-    }
-    
-    // Event Tracking
-    
-    private func trackEvent(_ eventType: LiveActivityEventType, activityId: String, templateId: String) {
-        repository.trackEvent(eventType: eventType, activityId: activityId, templateId: templateId) { result in
-            if case .failure(let error) = result {
-                LiveActivityLogger.shared.error("Event tracking failed [\(eventType.rawValue)]: \(error.localizedDescription)")
-            }
-        }
     }
     
     // Persistence
@@ -287,17 +306,22 @@ internal class LiveActivityManager {
         hotMessageClearTasks.removeValue(forKey: activityId)
         
         guard let carrier = state as? PPGHotMessageCarrying,
-              let hot = carrier.hotMessage,
-              hot.durationSeconds > 0 else { return }
+              let hot = carrier.hotMessage else { return }
         
         // Use HotMessageStore as the source of truth so the clear instant
         // matches what the widget computed from the same `(activityId, hotMessageId)`.
+        // `endDate` is `min(receivedAt + maxDisplayDuration, expiresAt)` —
+        // shared with `PPGHotMessageView` so the auto-clear and the visual
+        // banner disappear at the same instant.
         let receivedAt = HotMessageStore.shared.receivedAt(
             activityID: activityId,
             hotMessageId: hot.id
         )
-        let endDate = receivedAt.addingTimeInterval(TimeInterval(hot.durationSeconds))
+        let endDate = hot.endDate(receivedAt: receivedAt)
         let delay = max(0, endDate.timeIntervalSinceNow)
+        // If the message is already past its end (e.g. backend pushed a stale
+        // hot-message), bail out — leave it to the next push to clear it.
+        guard delay > 0 else { return }
         let nanoseconds = UInt64(delay * 1_000_000_000)
         
         let hotMessageId = hot.id

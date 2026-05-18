@@ -10,19 +10,31 @@ import Foundation
 /// Transient, time-bounded message shown on top of a Live Activity
 /// (e.g. "Goal cancelled after VAR", "Yellow card for #10").
 ///
-/// The message is part of `ContentState` and is rendered by the widget
-/// for `durationSeconds` after the first time the widget sees this `id`.
+/// The message is part of `ContentState`. Visibility is the **minimum**
+/// of two cutoffs:
+/// 1. `receivedAt + maxDisplayDuration` — SDK-controlled local cap, ensures
+///    the banner never overstays the design intent (10 s).
+/// 2. `expiresAt` — backend-controlled hard cutoff. After this instant the
+///    message is considered stale and must not be shown, even if it was
+///    just received.
+///
 /// Visibility is enforced via two complementary mechanisms:
-/// 1. `PPGHotMessageView` uses a SwiftUI `TimelineView` to drop the banner
-///    at `receivedAt + durationSeconds`.
-/// 2. `LiveActivityManager` schedules a follow-up `Activity.update` that
-///    clears `hotMessage` at the same instant — this is the authoritative
-///    path because Live Activity `TimelineView` updates can be deferred
-///    when the window is below the system's render budget.
-///    The auto-clear is cancelled if the host updates the activity
-///    earlier (e.g. backend pushes a new state via ActivityKit).
+/// - `PPGHotMessageView` uses a SwiftUI `TimelineView` to drop the banner
+///   at the computed end instant.
+/// - `LiveActivityManager` schedules a follow-up `Activity.update` that
+///   clears `hotMessage` at the same instant — this is the authoritative
+///   path because Live Activity `TimelineView` updates can be deferred
+///   when the window is below the system's render budget. The auto-clear
+///   is cancelled if the host updates the activity earlier (e.g. backend
+///   pushes a new state via ActivityKit).
 @available(iOS 17.2, *)
-public struct PPGHotMessage: Codable, Sendable, Hashable {
+public struct PPGHotMessage: Sendable, Hashable {
+    
+    /// SDK-controlled maximum local display duration (seconds).
+    /// Hot message should be visible for up to 10 s on iOS regardless
+    /// of `expiresAt`.
+    public static let maxDisplayDuration: TimeInterval = 10
+    
     /// Unique identifier. A change in `id` starts a new visibility window;
     /// the same `id` across renders keeps the existing window.
     public let id: String
@@ -30,14 +42,55 @@ public struct PPGHotMessage: Codable, Sendable, Hashable {
     /// The message text rendered inside the Live Activity.
     public let text: String
     
-    /// How long (in seconds) the message stays visible after the first
-    /// render on the device. Typical values: 5-15 seconds.
-    public let durationSeconds: Int
+    /// Hard cutoff sent by the backend (Unix epoch seconds → `Date`).
+    /// The message must not be displayed after this instant, even if it
+    /// was just received.
+    public let expiresAt: Date
     
-    public init(id: String, text: String, durationSeconds: Int) {
+    public init(id: String, text: String, expiresAt: Date) {
         self.id = id
         self.text = text
-        self.durationSeconds = durationSeconds
+        self.expiresAt = expiresAt
+    }
+    
+    /// Effective end-of-visibility for this message, given the instant the
+    /// device first saw it. Always the earlier of:
+    /// - `receivedAt + maxDisplayDuration`
+    /// - `expiresAt`
+    public func endDate(receivedAt: Date) -> Date {
+        let localCap = receivedAt.addingTimeInterval(Self.maxDisplayDuration)
+        return min(localCap, expiresAt)
+    }
+}
+
+// Codable — backend wire format is `{id, text, timestamp}` where
+// `timestamp` is Unix epoch seconds.
+// Both `id` and `timestamp` are treated as optional for forward-compat:
+// - missing `id`        → stable UUID derived from `text` (same message = same id)
+// - missing `timestamp` → now + maxDisplayDuration (message visible for one local window)
+@available(iOS 17.2, *)
+extension PPGHotMessage: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case id, text, timestamp
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        id = try c.decodeIfPresent(String.self, forKey: .id)
+            ?? UUID().uuidString
+        if let epoch = try c.decodeIfPresent(Double.self, forKey: .timestamp) {
+            expiresAt = Date(timeIntervalSince1970: epoch)
+        } else {
+            expiresAt = Date().addingTimeInterval(Self.maxDisplayDuration)
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(text, forKey: .text)
+        try c.encode(expiresAt.timeIntervalSince1970, forKey: .timestamp)
     }
 }
 

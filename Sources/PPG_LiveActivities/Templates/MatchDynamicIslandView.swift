@@ -19,9 +19,7 @@ public struct PPGMatchDynamicIsland {
         self.context = context
     }
     
-    private var phase: MatchPhase? {
-        return MatchPhase(rawValue: context.state.matchPhase)
-    }
+    private var phase: MatchPhase { context.state.status }
     
     /// Build the DynamicIsland configuration
     public func body() -> DynamicIsland {
@@ -70,7 +68,7 @@ public struct PPGMatchDynamicIsland {
                     .fontWeight(.medium)
                     .lineLimit(1)
                 
-                Text("\(context.state.homeScore)")
+                Text("\(context.state.homeTeamScore)")
                     .font(.title2)
                     .fontWeight(.bold)
                     .monospacedDigit()
@@ -86,7 +84,7 @@ public struct PPGMatchDynamicIsland {
                     .fontWeight(.medium)
                     .lineLimit(1)
                 
-                Text("\(context.state.awayScore)")
+                Text("\(context.state.awayTeamScore)")
                     .font(.title2)
                     .fontWeight(.bold)
                     .monospacedDigit()
@@ -98,41 +96,17 @@ public struct PPGMatchDynamicIsland {
     
     private var expandedCenter: some View {
         VStack(spacing: 2) {
-            if let phase = phase {
-                HStack(spacing: 4) {
-                    if phase.isPlaying, let minute = context.state.matchMinute, !minute.isEmpty {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 5, height: 5)
-                        
-                        Text("\(minute)'")
-                            .font(.caption2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.green)
-                    }
-                    
-                    Text(context.attributes.label(for: phase))
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundColor(phase.color)
+            HStack(spacing: 4) {
+                if phase.isPlaying {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 5, height: 5)
                 }
-            }
-            
-            // Pre-match countdown — message + live timer
-            if phase == .preMatch, let startDate = context.state.startDate {
-                if let message = context.attributes.countdown?.message,
-                   !message.isEmpty {
-                    Text(message)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .lineLimit(1)
-                }
-                Text(startDate, style: .timer)
+                
+                Text(context.attributes.label(for: phase))
                     .font(.caption2)
-                    .fontWeight(.semibold)
-                    .monospacedDigit()
-                    .foregroundColor(.primary)
-                    .multilineTextAlignment(.center)
+                    .fontWeight(.medium)
+                    .foregroundColor(phase.color)
             }
         }
     }
@@ -182,21 +156,15 @@ public struct PPGMatchDynamicIsland {
     
     private var compactTrailing: some View {
         HStack(spacing: 3) {
-            if let phase = phase, phase.isPlaying,
-               let minute = context.state.matchMinute, !minute.isEmpty {
+            if phase.isPlaying {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 5, height: 5)
-                Text("\(minute)'")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.green)
-            } else if let phase = phase {
-                Text(phase.shortText)
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(phase.color)
             }
+            Text(phase.shortText)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundColor(phase.color)
         }
     }
     

@@ -36,7 +36,10 @@ public struct PPGHotMessageView: View {
             activityID: activityID,
             hotMessageId: hotMessage.id
         )
-        let endDate = receivedAt.addingTimeInterval(TimeInterval(hotMessage.durationSeconds))
+        // Effective end = min(receivedAt + maxDisplayDuration, expiresAt).
+        // The local cap (10s) protects design intent; `expiresAt` is the
+        // backend-controlled hard cutoff for stale messages.
+        let endDate = hotMessage.endDate(receivedAt: receivedAt)
         
         TimelineView(.explicit([Date(), endDate])) { timeline in
             if timeline.date < endDate {

@@ -21,16 +21,13 @@ public struct PPGMatchLockScreenView: View {
         self.context = context
     }
     
-    private var phase: MatchPhase? {
-        return MatchPhase(rawValue: context.state.matchPhase)
-    }
+    private var phase: MatchPhase { context.state.status }
     
     /// Background for the current match phase — uses backend-provided
     /// `statusBackgrounds` when available, falls back to the built-in gradient.
     @ViewBuilder
     private var backgroundView: some View {
-        if let phase = phase,
-           let colorSet = context.attributes.background(for: phase) {
+        if let colorSet = context.attributes.background(for: phase) {
             colorSet.view(for: colorScheme)
         } else {
             LinearGradient(
@@ -54,7 +51,7 @@ public struct PPGMatchLockScreenView: View {
                     teamView(
                         name: context.attributes.homeTeamName,
                         badgeUrl: context.attributes.homeTeamBadgeUrl,
-                        score: context.state.homeScore,
+                        score: context.state.homeTeamScore,
                         alignment: .trailing
                     )
                     
@@ -65,7 +62,7 @@ public struct PPGMatchLockScreenView: View {
                     teamView(
                         name: context.attributes.awayTeamName,
                         badgeUrl: context.attributes.awayTeamBadgeUrl,
-                        score: context.state.awayScore,
+                        score: context.state.awayTeamScore,
                         alignment: .leading
                     )
                 }
@@ -138,46 +135,18 @@ public struct PPGMatchLockScreenView: View {
                 .foregroundColor(.white)
                 .monospacedDigit()
             
-            // Phase + Minute
+            // Phase label
             HStack(spacing: 4) {
-                if let phase = phase {
-                    if phase.isPlaying, let minute = context.state.matchMinute, !minute.isEmpty {
-                        // Show pulsing dot for live match
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 6, height: 6)
-                        
-                        Text("\(minute)'")
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.green)
-                    }
-                    
-                    Text(context.attributes.label(for: phase))
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundColor(phase.color)
+                if phase.isPlaying {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 6, height: 6)
                 }
-            }
-            
-            // Countdown timer for pre-match
-            if let phase = phase, phase == .preMatch,
-               let startDate = context.state.startDate {
-                VStack(spacing: 2) {
-                    if let message = context.attributes.countdown?.message,
-                       !message.isEmpty {
-                        Text(message)
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.6))
-                            .multilineTextAlignment(.center)
-                    }
-                    Text(startDate, style: .timer)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white.opacity(0.8))
-                        .monospacedDigit()
-                        .multilineTextAlignment(.center)
-                }
+                
+                Text(context.attributes.label(for: phase))
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(phase.color)
             }
             
             // CTA button

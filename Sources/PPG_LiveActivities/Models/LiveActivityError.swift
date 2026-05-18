@@ -12,7 +12,7 @@ import Foundation
 internal enum LiveActivityError: LocalizedError {
     case encodingFailed
     case invalidURL
-    case serverError(Int)
+    case serverError(code: Int, body: String?)
     
     var errorDescription: String? {
         switch self {
@@ -20,7 +20,10 @@ internal enum LiveActivityError: LocalizedError {
             return "Failed to encode request body"
         case .invalidURL:
             return "Invalid API URL"
-        case .serverError(let code):
+        case .serverError(let code, let body):
+            if let body, !body.isEmpty {
+                return "Server error: HTTP \(code) — \(body)"
+            }
             return "Server error: HTTP \(code)"
         }
     }

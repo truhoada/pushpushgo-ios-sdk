@@ -13,143 +13,252 @@ import ActivityKit
 @available(iOS 17.2, *)
 public struct MatchActivityAttributes: ActivityAttributes {
     
-    // Static Properties — flat mirror of the backend `attributes` payload.
-    // Layout matches `PPGFootballMatchConfiguration` + `notificationId`
+    // Static Properties — exact field-for-field mirror of the backend
+    // `aps.attributes` payload sent in the `event:start` APNs push.
     
-    /// PPG Live Notification identifier (campaign id).
-    public let notificationId: String
+    /// PPG Live Notification identifier (per-match id used for subscriber
+    /// registration and REST lookups).
+    public let liveNotificationId: String
     
     /// Template discriminator (always `.footballMatchTracking` on the wire).
-    public let type: PPGLiveActivityTemplate
+    public let template: PPGLiveActivityTemplate
     
     /// Static content (title, team names, badge image URLs).
     public let content: PPGFootballMatchContent
     
-    /// Per-platform design (status backgrounds, progress bar colors).
+    /// Per-platform design. iOS-only on the APNs wire; `design.android`
+    /// is decoded from REST responses but not from push attributes.
     public let design: PPGFootballMatchDesign
     
     /// Per-status display labels. Keys are raw `MatchPhase` values.
     public let statusLabels: [String: String]
     
     /// Backend-defined CTA actions (URL / open app / close).
-    public let actions: [PPGLiveActivityAction]
+    /// Wire name is `actionSet` to match the APNs payload.
+    public let actionSet: [PPGLiveActivityAction]
     
     /// Maximum activity lifetime hint.
     public let timeout: PPGLiveActivityTimeout
     
-    /// Optional pre-match countdown configuration. When present and the
-    /// activity is in `.preMatch` phase with a `startDate` in the future,
-    /// the widget renders `countdown.message` next to a live timer that ticks
-    /// down to `startDate`.
-    public let countdown: PPGLiveActivityCountdown?
+    /// Deep-link URL opened when the user taps the Live Activity background.
+    public let url: String?
     
-    // ContentState (dynamic, updated in real-time)
+    // ContentState (dynamic, updated in real-time via APNs `event:update`)
     
     public struct ContentState: Codable, Hashable {
-        /// Home team score
-        public let homeScore: Int
+        /// Home team score (wire: `homeTeamScore`).
+        public let homeTeamScore: Int
         
-        /// Away team score
-        public let awayScore: Int
+        /// Away team score (wire: `awayTeamScore`).
+        public let awayTeamScore: Int
         
-        /// Current match phase raw value (maps to MatchPhase enum)
-        public let matchPhase: String
-        
-        /// Current match minute display string (e.g. "45", "45+2", "90+5").
-        /// Optional — backend may omit it when it's not meaningful
-        /// (e.g. before kickoff or at full-time).
-        public let matchMinute: String?
-        
-        /// Optional start date for countdown timer (e.g. before kickoff)
-        public let startDate: Date?
+        /// Current match phase (wire: `status`, raw enum value).
+        public let status: MatchPhase
         
         /// Optional transient hot message (e.g. "Goal cancelled after VAR").
-        /// When set, the widget renders it for `durationSeconds` after the
-        /// first render on the device, then auto-hides. Set to `nil` by the
-        /// backend to clear it early.
+        /// When set, the widget renders it until
+        /// `min(receivedAt + PPGHotMessage.maxDisplayDuration, hotMessage.expiresAt)`,
+        /// then auto-hides. Backend may also push the same content state with
+        /// `hotMessage: nil` to clear it early.
         public let hotMessage: PPGHotMessage?
         
         public init(
-            homeScore: Int,
-            awayScore: Int,
-            matchPhase: String,
-            matchMinute: String? = nil,
-            startDate: Date? = nil,
+            homeTeamScore: Int,
+            awayTeamScore: Int,
+            status: MatchPhase,
             hotMessage: PPGHotMessage? = nil
         ) {
-            self.homeScore = homeScore
-            self.awayScore = awayScore
-            self.matchPhase = matchPhase
-            self.matchMinute = matchMinute
-            self.startDate = startDate
+            self.homeTeamScore = homeTeamScore
+            self.awayTeamScore = awayTeamScore
+            self.status = status
             self.hotMessage = hotMessage
-        }
-        
-        /// Convenience initializer using the type-safe MatchPhase enum
-        public init(
-            homeScore: Int,
-            awayScore: Int,
-            phase: MatchPhase,
-            matchMinute: String? = nil,
-            startDate: Date? = nil,
-            hotMessage: PPGHotMessage? = nil
-        ) {
-            self.homeScore = homeScore
-            self.awayScore = awayScore
-            self.matchPhase = phase.rawValue
-            self.matchMinute = matchMinute
-            self.startDate = startDate
-            self.hotMessage = hotMessage
-        }
-        
-        /// Parsed MatchPhase from the raw string
-        public var phase: MatchPhase? {
-            return MatchPhase(rawValue: matchPhase)
         }
         
         /// Human-readable phase display text
-        public var phaseDisplayText: String {
-            return phase?.displayText ?? matchPhase
-        }
+        public var phaseDisplayText: String { status.displayText }
         
-        /// Score formatted as "homeScore : awayScore"
+        /// Score formatted as "homeTeamScore : awayTeamScore"
         public var scoreDisplay: String {
-            return "\(homeScore) : \(awayScore)"
+            return "\(homeTeamScore) : \(awayTeamScore)"
         }
         
-        /// Compact score formatted as "homeScore:awayScore"
+        /// Compact score formatted as "homeTeamScore:awayTeamScore"
         public var scoreCompact: String {
-            return "\(homeScore):\(awayScore)"
+            return "\(homeTeamScore):\(awayTeamScore)"
+        }
+        
+        // Tolerant Codable — if `hotMessage` is present but fails to decode
+        // (e.g. unexpected field names or types from the backend), log the
+        // error and fall back to `nil` so the score/status update still lands.
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            homeTeamScore = try c.decode(Int.self, forKey: .homeTeamScore)
+            awayTeamScore = try c.decode(Int.self, forKey: .awayTeamScore)
+            status = try c.decode(MatchPhase.self, forKey: .status)
+            do {
+                hotMessage = try c.decodeIfPresent(PPGHotMessage.self, forKey: .hotMessage)
+            } catch {
+                LiveActivityLogger.shared.error(
+                    "ContentState: hotMessage decode failed (falling back to nil). Error: \(error)"
+                )
+                hotMessage = nil
+            }
+        }
+        
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encode(homeTeamScore, forKey: .homeTeamScore)
+            try c.encode(awayTeamScore, forKey: .awayTeamScore)
+            try c.encode(status, forKey: .status)
+            try c.encodeIfPresent(hotMessage, forKey: .hotMessage)
+        }
+        
+        private enum CodingKeys: String, CodingKey {
+            case homeTeamScore, awayTeamScore, status, hotMessage
         }
     }
     
     // Initializer
     
     public init(
-        notificationId: String,
-        type: PPGLiveActivityTemplate = .footballMatchTracking,
+        liveNotificationId: String,
+        template: PPGLiveActivityTemplate = .footballMatchTracking,
         content: PPGFootballMatchContent,
         design: PPGFootballMatchDesign,
         statusLabels: [String: String] = [:],
-        actions: [PPGLiveActivityAction] = [],
+        actionSet: [PPGLiveActivityAction] = [],
         timeout: PPGLiveActivityTimeout,
-        countdown: PPGLiveActivityCountdown? = nil
+        url: String? = nil
     ) {
-        self.notificationId = notificationId
-        self.type = type
+        self.liveNotificationId = liveNotificationId
+        self.template = template
         self.content = content
         self.design = design
         self.statusLabels = statusLabels
-        self.actions = actions
+        self.actionSet = actionSet
         self.timeout = timeout
-        self.countdown = countdown
+        self.url = url
+    }
+    
+    // Tolerant Codable
+    //
+    // Backend's APNs `aps.attributes` payload may differ from the REST DTO
+    // in subtle ways (different field names, omitted optional collections).
+    // To avoid `NSCoderValueNotFoundError` killing the activity right after
+    // ActivityKit creates it, we:
+    //   - accept multiple wire names for the id (`liveNotificationId` / `id` /
+    //     `notificationId`) and template (`template` / `type`),
+    //   - default `statusLabels` and `actionSet` to empty when absent,
+    //   - log a diagnostic dump of all present keys when decoding fails so
+    //     we can pinpoint the missing field without guessing.
+    
+    private enum CodingKeys: String, CodingKey {
+        case liveNotificationId, id, notificationId
+        case template, type
+        case content, design, statusLabels
+        case actionSet, actions
+        case timeout
+        case url
+    }
+    
+    public init(from decoder: Decoder) throws {
+        do {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            
+            // id — accept any of the three known wire names.
+            if let v = try c.decodeIfPresent(String.self, forKey: .liveNotificationId) {
+                self.liveNotificationId = v
+            } else if let v = try c.decodeIfPresent(String.self, forKey: .id) {
+                self.liveNotificationId = v
+            } else if let v = try c.decodeIfPresent(String.self, forKey: .notificationId) {
+                self.liveNotificationId = v
+            } else {
+                throw DecodingError.keyNotFound(
+                    CodingKeys.liveNotificationId,
+                    .init(codingPath: c.codingPath, debugDescription: "Missing id/liveNotificationId/notificationId")
+                )
+            }
+            
+            // template — accept `template` or `type`.
+            self.template = try c.decodeIfPresent(PPGLiveActivityTemplate.self, forKey: .template)
+                ?? c.decodeIfPresent(PPGLiveActivityTemplate.self, forKey: .type)
+                ?? .footballMatchTracking
+            
+            self.content = try c.decode(PPGFootballMatchContent.self, forKey: .content)
+            self.design = try c.decode(PPGFootballMatchDesign.self, forKey: .design)
+            self.statusLabels = try c.decodeIfPresent([String: String].self, forKey: .statusLabels) ?? [:]
+            
+            // actionSet — accept `actionSet` or `actions`. Each element
+            // requires a `type` discriminator (URL/OPEN_APP/CLOSE). If the
+            // backend's APNs payload omits `type` on any element we would
+            // otherwise fail the *entire* attributes decode and the activity
+            // would never appear. Fall back to an empty action list with a
+            // loud warning so the activity is still rendered.
+            self.actionSet = Self.decodeActionSet(from: c)
+            
+            self.timeout = try c.decode(PPGLiveActivityTimeout.self, forKey: .timeout)
+            self.url = try c.decodeIfPresent(String.self, forKey: .url)
+        } catch {
+            // Dump all top-level keys present in the payload to help diagnose
+            // schema mismatches between backend push payload and this model.
+            if let raw = try? decoder.container(keyedBy: DynamicCodingKey.self) {
+                let keys = raw.allKeys.map(\.stringValue).sorted().joined(separator: ", ")
+                LiveActivityLogger.shared.error(
+                    "MatchActivityAttributes decode failed: \(error). Keys present in payload: [\(keys)]"
+                )
+            } else {
+                LiveActivityLogger.shared.error(
+                    "MatchActivityAttributes decode failed and payload is not a keyed container: \(error)"
+                )
+            }
+            throw error
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(liveNotificationId, forKey: .liveNotificationId)
+        try c.encode(template, forKey: .template)
+        try c.encode(content, forKey: .content)
+        try c.encode(design, forKey: .design)
+        try c.encode(statusLabels, forKey: .statusLabels)
+        try c.encode(actionSet, forKey: .actionSet)
+        try c.encode(timeout, forKey: .timeout)
+        try c.encodeIfPresent(url, forKey: .url)
+    }
+    
+    /// Decode `actionSet` (or legacy `actions`) tolerantly. If the backend
+    /// payload is malformed (e.g. missing `type` on some elements), log a
+    /// detailed warning naming the offending key and return `[]` instead of
+    /// failing the whole attributes decode. This trades CTA buttons for
+    /// activity visibility — preferable while the backend payload is being
+    /// fixed.
+    private static func decodeActionSet(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) -> [PPGLiveActivityAction] {
+        for key in [CodingKeys.actionSet, CodingKeys.actions] {
+            guard container.contains(key) else { continue }
+            do {
+                return try container.decode([PPGLiveActivityAction].self, forKey: key)
+            } catch {
+                LiveActivityLogger.shared.warning(
+                    """
+                    Failed to decode `\(key.stringValue)` in APNs payload — falling back to empty action list. \
+                    Activity will render without CTA buttons. Backend must include the `type` discriminator \
+                    (\"URL\" / \"OPEN_APP\" / \"CLOSE\") on every element of `actionSet`. Underlying error: \(error)
+                    """
+                )
+                return []
+            }
+        }
+        return []
     }
     
     // View-facing computed properties.
     // Widget views read these instead of reaching into nested `content`.
     
-    /// Alias for `notificationId` — stable id of the match.
-    public var matchId: String { notificationId }
+    /// Alias for `liveNotificationId` — stable id of the match.
+    public var matchId: String { liveNotificationId }
     
     /// Home team display name (from `content`).
     public var homeTeamName: String { content.homeTeamName }
@@ -181,9 +290,9 @@ public struct MatchActivityAttributes: ActivityAttributes {
     /// Title shown in the header of the Live Activity.
     public var title: String { content.title }
     
-    /// Deep link to the match detail screen.
-    /// Currently not part of backend payload; reserved for future use.
-    public var deepLink: String? { nil }
+    /// Deep link opened when the user taps the Live Activity background
+    /// (comes from `configuration.url` in the APNs attributes payload).
+    public var deepLink: String? { url }
     
     /// Convenience CTA text — first URL action's name, if any.
     public var ctaText: String? { firstUrlAction?.name }
@@ -192,7 +301,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
     public var ctaDeepLink: String? { firstUrlAction?.url }
     
     private var firstUrlAction: (name: String, url: String)? {
-        actions.compactMap { action -> (String, String)? in
+        actionSet.compactMap { action -> (String, String)? in
             if case .url(let name, let url, _) = action { return (name, url) }
             return nil
         }.first
@@ -232,26 +341,33 @@ public struct MatchActivityAttributes: ActivityAttributes {
         }
         
         let attributes = MatchActivityAttributes(
-            notificationId: dto.id,
-            type: config.type,
+            liveNotificationId: dto.id,
+            template: config.type,
             content: config.content,
             design: config.design,
             statusLabels: config.statusLabels,
-            actions: config.actions,
+            actionSet: config.actions,
             timeout: config.timeout,
-            countdown: dto.startPolicy.countdown
+            url: config.url
         )
         
         let state = ContentState(
-            homeScore: liveData.homeTeamScore,
-            awayScore: liveData.awayTeamScore,
-            phase: liveData.status,
-            matchMinute: nil,
-            startDate: dto.startPolicy.scheduledAt
+            homeTeamScore: liveData.homeTeamScore,
+            awayTeamScore: liveData.awayTeamScore,
+            status: liveData.status
         )
         
         return (attributes, state)
     }
+}
+
+/// Pass-through `CodingKey` that accepts any string. Used to dump the top
+/// level keys present in a payload during decode-failure diagnostics.
+private struct DynamicCodingKey: CodingKey {
+    var stringValue: String
+    var intValue: Int? { nil }
+    init?(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { return nil }
 }
 
 // PPGHotMessageCarrying conformance enables `LiveActivityManager` to schedule
@@ -260,11 +376,9 @@ public struct MatchActivityAttributes: ActivityAttributes {
 extension MatchActivityAttributes.ContentState: PPGHotMessageCarrying {
     public func clearingHotMessage() -> Self {
         Self(
-            homeScore: homeScore,
-            awayScore: awayScore,
-            matchPhase: matchPhase,
-            matchMinute: matchMinute,
-            startDate: startDate,
+            homeTeamScore: homeTeamScore,
+            awayTeamScore: awayTeamScore,
+            status: status,
             hotMessage: nil
         )
     }

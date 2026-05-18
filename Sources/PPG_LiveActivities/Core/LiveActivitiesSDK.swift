@@ -142,37 +142,44 @@ public class LiveActivitiesSDK {
         return ActivityAuthorizationInfo().areActivitiesEnabled
     }
     
-    // Observer API (push-to-start flow)
-
-    /// On iOS 18+ the activity will subscribe to a broadcast channel (1 push → all devices).
-    /// On iOS 17.2–17.x each device gets individual pushes.
+    // Subscriber API (per-notification push-to-start flow)
+    
+    /// Subscribe this device to a specific Live Notification on the PPG
+    /// backend. On registration the SDK:
+    ///
+    /// 1. Generates (or reuses) a persistent `installationId` UUIDv4.
+    /// 2. Listens on `Activity<T>.pushToStartTokenUpdates`. On each new token
+    ///    it POSTs `{ installationId, endpoint:{transport:APNS, remoteStartToken} }`
+    ///    to `/core/projects/{project}/live-notifications/{id}/subscribers`.
+    /// 3. When the backend pushes `event:start`, the OS creates a Live
+    ///    Activity locally. The SDK then forwards every rotated
+    ///    `activity.pushTokenUpdates` token via PUT `/subscribers/{id}/endpoint`
+    ///    so subsequent `event:update` pushes can target this device.
     ///
     /// - Parameters:
-    ///   - type: The `ActivityAttributes` type for this template
-    ///   - campaignId: Campaign identifier from PPG panel / API
-    ///   - templateId: Template identifier for backend tracking (e.g. "match")
-    ///   - onStatus: Callback with lifecycle status updates
-    @available(iOS 17.2, *)
-    public func observeLiveActivity<T: ActivityAttributes>(
+    ///   - type: The `ActivityAttributes` type matching the backend template
+    ///     (e.g. `MatchActivityAttributes.self`).
+    ///   - liveNotificationId: Identifier returned by the backend after the
+    ///     match notification is created (`POST /football-match-tracking`).
+    ///   - onStatus: Lifecycle callback. Useful for diagnostics, in-app UI,
+    ///     and forwarding errors. May fire from any thread.
+    public func subscribe<T: ActivityAttributes>(
         _ type: T.Type,
-        campaignId: String,
-        templateId: String,
-        onStatus: @escaping @Sendable (LiveActivityObserverStatus) -> Void
+        liveNotificationId: String,
+        onStatus: @escaping @Sendable (LiveNotificationSubscriptionStatus) -> Void
     ) {
         guard let manager = requireInitialized() else {
             onStatus(.error(.activitiesNotEnabled))
             return
         }
-        
-        manager.observeCampaign(type, campaignId: campaignId, templateId: templateId, onStatus: onStatus)
+        manager.subscribe(type, liveNotificationId: liveNotificationId, onStatus: onStatus)
     }
     
-    /// Stop observing a campaign. Cancels push-to-start token observation
-    /// and any pending activity state tracking.
-    @available(iOS 17.2, *)
-    public func stopObserving(campaignId: String) {
+    /// Cancel an active subscription. Tears down local task observers and
+    /// deletes the subscriber on the backend (`DELETE /subscribers/{id}`).
+    public func unsubscribe(liveNotificationId: String) {
         guard let manager = requireInitialized() else { return }
-        manager.stopObserving(campaignId: campaignId)
+        manager.unsubscribe(liveNotificationId: liveNotificationId)
     }
     
     // Initialization guard (DRY)

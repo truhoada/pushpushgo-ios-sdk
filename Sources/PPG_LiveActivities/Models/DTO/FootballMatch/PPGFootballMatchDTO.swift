@@ -95,14 +95,16 @@ public struct PPGFootballMatchAndroidDesign: Codable, Sendable, Hashable {
     }
 }
 
-/// Full design block (both iOS and Android sections).
+/// Full design block. The iOS section is always present; the Android
+/// section is only delivered in REST responses (`GET /live-notifications/{id}`)
+/// — APNs `attributes` payloads contain only `ios` to keep wire size small.
 @available(iOS 17.2, *)
 public struct PPGFootballMatchDesign: Codable, Sendable, Hashable {
-    public let android: PPGFootballMatchAndroidDesign
+    public let android: PPGFootballMatchAndroidDesign?
     public let ios: PPGFootballMatchIOSDesign
     
     public init(
-        android: PPGFootballMatchAndroidDesign,
+        android: PPGFootballMatchAndroidDesign? = nil,
         ios: PPGFootballMatchIOSDesign
     ) {
         self.android = android
@@ -121,6 +123,8 @@ public struct PPGFootballMatchConfiguration: Codable, Sendable, Hashable {
     public let statusLabels: [String: String]
     public let actions: [PPGLiveActivityAction]
     public let timeout: PPGLiveActivityTimeout
+    /// Deep-link URL opened when the user taps the Live Activity background.
+    public let url: String?
     
     public init(
         type: PPGLiveActivityTemplate = .footballMatchTracking,
@@ -128,7 +132,8 @@ public struct PPGFootballMatchConfiguration: Codable, Sendable, Hashable {
         design: PPGFootballMatchDesign,
         statusLabels: [String: String],
         actions: [PPGLiveActivityAction],
-        timeout: PPGLiveActivityTimeout
+        timeout: PPGLiveActivityTimeout,
+        url: String? = nil
     ) {
         self.type = type
         self.content = content
@@ -136,6 +141,7 @@ public struct PPGFootballMatchConfiguration: Codable, Sendable, Hashable {
         self.statusLabels = statusLabels
         self.actions = actions
         self.timeout = timeout
+        self.url = url
     }
     
     // Lookup Helpers

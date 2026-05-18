@@ -23,110 +23,159 @@ internal class LiveActivityRepository {
         self.session = URLSession.shared
     }
     
-    /// Register an ActivityKit push token with the PPG backend.
-    func registerPushToken(
-        activityId: String,
-        templateId: String,
-        pushToken: String,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        let body = RegisterPushTokenRequest(
-            activityId: activityId,
-            templateId: templateId,
-            pushToken: pushToken,
-            subscriberId: PushSDKBridge.subscriberId
-        )
-        performRequest(path: "live-activity/register", body: body, completion: completion)
-    }
+    // Live Notification Subscribers
     
-    /// Track a Live Activity event.
-    func trackEvent(
-        eventType: LiveActivityEventType,
-        activityId: String,
-        templateId: String,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        let body = LiveActivityEventRequest(
-            type: eventType.rawValue,
-            payload: LiveActivityEventPayload(
-                activityId: activityId,
-                templateId: templateId,
-                timestamp: ISO8601DateFormatter().string(from: Date()),
-                subscriberId: PushSDKBridge.subscriberId
+    /// `POST /core/projects/{project}/live-notifications/{id}/subscribers`
+    /// Idempotent on `installationId` (request body) — calling again with
+    /// the same id updates the stored `endpoint` instead of creating a
+    /// duplicate. Returns the backend-assigned `subscriberId` (mongodb
+    /// ObjectId) which MUST be used as the path component for any
+    /// subsequent `PUT /endpoint` / `DELETE` — see
+    /// `PPGSubscribeLiveNotificationResponse`.
+    func subscribe(
+        liveNotificationId: String,
+        installationId: String,
+        remoteStartToken: String,
+        updateToken: String?
+    ) async throws -> String {
+        let body = PPGSubscribeLiveNotificationRequest(
+            installationId: installationId,
+            installationMetadata: .current,
+            endpoint: PPGLiveNotificationSubscriberEndpoint(
+                remoteStartToken: remoteStartToken,
+                updateToken: updateToken
             )
         )
-        performRequest(path: "live-activity/event", body: body, completion: completion)
+        let response: PPGSubscribeLiveNotificationResponse = try await performLiveNotificationRequest(
+            method: "POST",
+            path: "live-notifications/\(liveNotificationId)/subscribers",
+            body: body
+        )
+        return response.id
     }
     
-    /// Register as observer for a campaign (push-to-start flow).
-    @available(iOS 17.2, *)
-    func registerObserver(body: ObserveRequest) async throws -> ObserveResponse {
-        return try await performDecodableRequest(path: "live-activity/observe", body: body)
+    /// `PUT /core/projects/{project}/live-notifications/{id}/subscribers/{subscriberId}/endpoint`
+    /// Refreshes the stored push tokens for an existing subscriber. Used
+    /// when ActivityKit rotates the `updateToken` mid-activity.
+    /// `subscriberId` is the value returned by `subscribe(...)`.
+    func updateSubscriberEndpoint(
+        liveNotificationId: String,
+        subscriberId: String,
+        remoteStartToken: String,
+        updateToken: String?
+    ) async throws {
+        let body = PPGUpdateLiveNotificationEndpointRequest(
+            installationMetadata: .current,
+            endpoint: PPGLiveNotificationSubscriberEndpoint(
+                remoteStartToken: remoteStartToken,
+                updateToken: updateToken
+            )
+        )
+        try await performLiveNotificationRequest(
+            method: "PUT",
+            path: "live-notifications/\(liveNotificationId)/subscribers/\(subscriberId)/endpoint",
+            body: body
+        )
+    }
+    
+    /// `DELETE /core/projects/{project}/live-notifications/{id}/subscribers/{subscriberId}`
+    func unsubscribe(
+        liveNotificationId: String,
+        subscriberId: String
+    ) async throws {
+        try await performLiveNotificationRequest(
+            method: "DELETE",
+            path: "live-notifications/\(liveNotificationId)/subscribers/\(subscriberId)",
+            body: Optional<EmptyBody>.none
+        )
     }
     
     // Shared HTTP logic
     
-    private func buildRequest<T: Encodable>(path: String, body: T) throws -> URLRequest {
-        guard let url = URL(string: "\(baseURL)/v1/ios/\(projectId)/\(path)") else {
+    /// Marker type for empty request bodies.
+    private struct EmptyBody: Encodable {}
+    
+    /// Build a request hitting `/core/projects/{projectId}/{path}` (the
+    /// public Live Notifications API). Body is optional — pass `nil` for
+    /// methods like DELETE that have no payload.
+    private func buildLiveNotificationRequest<T: Encodable>(
+        method: String,
+        path: String,
+        body: T?
+    ) throws -> URLRequest {
+        guard let url = URL(string: "\(baseURL)/core/projects/\(projectId)/\(path)") else {
             throw LiveActivityError.invalidURL
         }
         
-        guard let encoded = try? JSONEncoder().encode(body) else {
-            throw LiveActivityError.encodingFailed
-        }
-        
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "X-Token")
-        request.httpBody = encoded
+        
+        if let body = body {
+            guard let encoded = try? JSONEncoder().encode(body) else {
+                throw LiveActivityError.encodingFailed
+            }
+            request.httpBody = encoded
+        }
+        
         return request
     }
     
-    private func performRequest<T: Encodable>(
+    /// Fire a Live Notifications API request and validate HTTP status.
+    /// Doesn't decode the body — for endpoints that return empty payloads.
+    private func performLiveNotificationRequest<T: Encodable>(
+        method: String,
         path: String,
-        body: T,
-        completion: @escaping (Result<Void, Error>) -> Void
-    ) {
-        let request: URLRequest
-        do {
-            request = try buildRequest(path: path, body: body)
-        } catch {
-            completion(.failure(error))
-            return
-        }
-        
-        session.dataTask(with: request) { _, response, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
-            
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-                completion(.failure(LiveActivityError.serverError(code)))
-                return
-            }
-            
-            completion(.success(()))
-        }.resume()
+        body: T?
+    ) async throws {
+        _ = try await performLiveNotificationRequestRaw(method: method, path: path, body: body)
     }
     
-    private func performDecodableRequest<TBody: Encodable, TResponse: Decodable>(
+    /// Variant that decodes the response body as `R`. Use for endpoints
+    /// that return a payload (currently `POST /subscribers` returning
+    /// `{ "id": "..." }`).
+    private func performLiveNotificationRequest<T: Encodable, R: Decodable>(
+        method: String,
         path: String,
-        body: TBody
-    ) async throws -> TResponse {
-        let request = try buildRequest(path: path, body: body)
-        
-        let (data, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw LiveActivityError.serverError(code)
+        body: T?
+    ) async throws -> R {
+        let data = try await performLiveNotificationRequestRaw(method: method, path: path, body: body)
+        do {
+            return try JSONDecoder().decode(R.self, from: data)
+        } catch {
+            throw LiveActivityError.serverError(
+                code: -1,
+                body: "Failed to decode response as \(R.self): \(error). Raw body: \(String(data: data, encoding: .utf8) ?? "<binary>")"
+            )
         }
-        
-        return try JSONDecoder().decode(TResponse.self, from: data)
     }
+    
+    private func performLiveNotificationRequestRaw<T: Encodable>(
+        method: String,
+        path: String,
+        body: T?
+    ) async throws -> Data {
+        let request = try buildLiveNotificationRequest(method: method, path: path, body: body)
+        if let bodyData = request.httpBody,
+           let bodyString = String(data: bodyData, encoding: .utf8) {
+            LiveActivityLogger.shared.debug(
+                "→ \(method) \(request.url?.path ?? "") body: \(bodyString)"
+            )
+        }
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if let responseString = String(data: data, encoding: .utf8), !responseString.isEmpty {
+            LiveActivityLogger.shared.debug(
+                "← HTTP \(statusCode) body: \(responseString)"
+            )
+        }
+        guard let http = response as? HTTPURLResponse,
+              (200...299).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8)
+            throw LiveActivityError.serverError(code: statusCode, body: body)
+        }
+        return data
+    }
+    
 }

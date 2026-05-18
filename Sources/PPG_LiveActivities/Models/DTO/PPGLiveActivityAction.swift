@@ -16,37 +16,110 @@ public enum PPGActionAlignment: String, Codable, Sendable {
     case stretch = "STRETCH"
 }
 
+/// Border styling for a single appearance mode.
+@available(iOS 17.2, *)
+public struct PPGActionBorder: Codable, Sendable, Hashable {
+    public let color: PPGColor
+    public let width: Double
+    
+    public init(color: PPGColor, width: Double) {
+        self.color = color
+        self.width = width
+    }
+}
+
+/// Colors and border for one appearance mode (light or dark).
+/// Mirrors `ILiveNotificationActionIOSAppearanceDTO`.
+/// Each field is a single `PPGColor` — light/dark split is handled by the
+/// outer `PPGActionIOSAppearanceSet`.
+@available(iOS 17.2, *)
+public struct PPGActionIOSAppearance: Codable, Sendable, Hashable {
+    public let textColor: PPGColor
+    public let backgroundColor: PPGColor?
+    public let border: PPGActionBorder?
+    
+    public init(
+        textColor: PPGColor,
+        backgroundColor: PPGColor? = nil,
+        border: PPGActionBorder? = nil
+    ) {
+        self.textColor = textColor
+        self.backgroundColor = backgroundColor
+        self.border = border
+    }
+}
+
+/// Light-mode / dark-mode appearance pair.
+/// Mirrors `ILiveNotificationActionIOSAppearanceSetDTO`.
+@available(iOS 17.2, *)
+public struct PPGActionIOSAppearanceSet: Codable, Sendable, Hashable {
+    public let lightMode: PPGActionIOSAppearance
+    public let darkMode: PPGActionIOSAppearance
+    
+    public init(lightMode: PPGActionIOSAppearance, darkMode: PPGActionIOSAppearance) {
+        self.lightMode = lightMode
+        self.darkMode = darkMode
+    }
+}
+
 /// iOS-specific styling applied to an action button.
+/// Mirrors `IBaseLiveNotificationActionDTO.design.ios`.
 @available(iOS 17.2, *)
 public struct PPGActionIOSDesign: Codable, Sendable, Hashable {
     public let alignment: PPGActionAlignment
     public let borderRadius: Double
-    public let textColor: PPGBasicColorSet
-    public let backgroundColor: PPGBasicColorSet
-    public let border: Border?
-    
-    public struct Border: Codable, Sendable, Hashable {
-        public let color: PPGBasicColorSet
-        public let width: Double
-        
-        public init(color: PPGBasicColorSet, width: Double) {
-            self.color = color
-            self.width = width
-        }
-    }
+    public let appearance: PPGActionIOSAppearanceSet
     
     public init(
         alignment: PPGActionAlignment,
         borderRadius: Double,
-        textColor: PPGBasicColorSet,
-        backgroundColor: PPGBasicColorSet,
-        border: Border?
+        appearance: PPGActionIOSAppearanceSet
     ) {
         self.alignment = alignment
         self.borderRadius = borderRadius
-        self.textColor = textColor
-        self.backgroundColor = backgroundColor
-        self.border = border
+        self.appearance = appearance
+    }
+    
+    // Backward-compatible decode: accept new `appearance` wrapper (current
+    // backend) and legacy flat `textColor`/`backgroundColor`/`border` fields
+    // (older backend versions that haven't migrated yet).
+    private enum CodingKeys: String, CodingKey {
+        case alignment, borderRadius, appearance
+        case textColor, backgroundColor, border
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        alignment = try c.decode(PPGActionAlignment.self, forKey: .alignment)
+        borderRadius = try c.decode(Double.self, forKey: .borderRadius)
+        if let app = try c.decodeIfPresent(PPGActionIOSAppearanceSet.self, forKey: .appearance) {
+            // New format
+            appearance = app
+        } else {
+            // Legacy flat format — textColor/backgroundColor were PPGBasicColorSet
+            // ({ lightMode: {hex}, darkMode: {hex} }). Split into separate modes.
+            let textSet = try c.decode(PPGBasicColorSet.self, forKey: .textColor)
+            let bgSet = try c.decodeIfPresent(PPGBasicColorSet.self, forKey: .backgroundColor)
+            let border = try c.decodeIfPresent(PPGActionBorder.self, forKey: .border)
+            let lightMode = PPGActionIOSAppearance(
+                textColor: .basic(hex: textSet.lightMode),
+                backgroundColor: bgSet.map { .basic(hex: $0.lightMode) },
+                border: border
+            )
+            let darkMode = PPGActionIOSAppearance(
+                textColor: .basic(hex: textSet.darkMode),
+                backgroundColor: bgSet.map { .basic(hex: $0.darkMode) },
+                border: border
+            )
+            appearance = PPGActionIOSAppearanceSet(lightMode: lightMode, darkMode: darkMode)
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(alignment, forKey: .alignment)
+        try c.encode(borderRadius, forKey: .borderRadius)
+        try c.encode(appearance, forKey: .appearance)
     }
 }
 
