@@ -55,6 +55,12 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     /// auto-clear Task whenever a push delivers a new `hotMessage`.
     private let onContentStateUpdated: (@Sendable (_ activityId: String, _ state: T.ContentState) -> Void)?
     
+    /// Called after subscriber registration when no activity is running yet.
+    /// Receives the raw JSON body from `GET /live-notifications/{id}`.
+    /// Return `(attributes, initialState)` to start the activity locally
+    /// (campaign already ONGOING), or `nil` to do nothing (not yet started).
+    private let onCampaignAlreadyActive: (@Sendable (_ payload: Data) async throws -> (T, T.ContentState)?)?
+    
     private var pushToStartTask: Task<Void, Never>?
     private var activityWatchTask: Task<Void, Never>?
     private var trackedActivities: [String: ActivityTracker] = [:]
@@ -81,7 +87,8 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         onActivityAppeared: (@Sendable (String, String) -> Void)? = nil,
         onActivityTokenUpdate: (@Sendable (String, String) -> Void)? = nil,
         onActivityCleared: (@Sendable (String) -> Void)? = nil,
-        onContentStateUpdated: (@Sendable (String, T.ContentState) -> Void)? = nil
+        onContentStateUpdated: (@Sendable (String, T.ContentState) -> Void)? = nil,
+        onCampaignAlreadyActive: (@Sendable (Data) async throws -> (T, T.ContentState)?)? = nil
     ) {
         self.repository = repository
         self.liveNotificationId = liveNotificationId
@@ -91,6 +98,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         self.onActivityTokenUpdate = onActivityTokenUpdate
         self.onActivityCleared = onActivityCleared
         self.onContentStateUpdated = onContentStateUpdated
+        self.onCampaignAlreadyActive = onCampaignAlreadyActive
     }
     
     deinit {
@@ -161,6 +169,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             )
             statusHandler(.registered)
             await flushPendingUpdateTokens()
+            await bootstrapIfCampaignActive()
         } catch {
             LiveActivityLogger.shared.error(
                 "Subscriber registration failed: \(error.localizedDescription)"
@@ -190,6 +199,48 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 "Unsubscribe failed: \(error.localizedDescription)"
             )
             statusHandler(.error(.unregistrationFailed(underlying: error)))
+        }
+    }
+    
+    // Late-subscriber bootstrap
+    
+    /// Called after successful registration when the subscriber may have
+    /// joined a campaign that is already ONGOING. Fetches the current
+    /// campaign payload, delegates parsing and activity-start decision to
+    /// `onCampaignAlreadyActive`, then wires up the new activity for token
+    /// forwarding exactly like a push-to-start activity.
+    private func bootstrapIfCampaignActive() async {
+        guard let onCampaignAlreadyActive else { return }
+        guard Activity<T>.activities.isEmpty else {
+            LiveActivityLogger.shared.debug(
+                "Bootstrap skipped — activity of type \(T.self) already running"
+            )
+            return
+        }
+        do {
+            let data = try await repository.fetchCampaign(liveNotificationId: liveNotificationId)
+            guard let (attrs, state) = try await onCampaignAlreadyActive(data) else {
+                LiveActivityLogger.shared.debug(
+                    "Bootstrap: campaign \(liveNotificationId) not yet active"
+                )
+                return
+            }
+            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+            let activity = try Activity.request(
+                attributes: attrs,
+                content: .init(state: state, staleDate: nil),
+                pushType: .token
+            )
+            LiveActivityLogger.shared.info(
+                "Bootstrap: started activity \(activity.id) for \(liveNotificationId)"
+            )
+            onActivityAppeared?(activity.id, liveNotificationId)
+            statusHandler(.activityStarted(activityId: activity.id))
+            trackActivity(activity)
+        } catch {
+            LiveActivityLogger.shared.error(
+                "Bootstrap failed for \(liveNotificationId): \(error.localizedDescription)"
+            )
         }
     }
     

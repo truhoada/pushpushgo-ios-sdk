@@ -78,6 +78,17 @@ internal class LiveActivityRepository {
         )
     }
     
+    /// `GET /core/projects/{project}/live-notifications/{id}`
+    /// Returns the raw JSON body for the campaign so the SDK can bootstrap
+    /// a locally-started Live Activity when the campaign is already ONGOING.
+    func fetchCampaign(liveNotificationId: String) async throws -> Data {
+        return try await performLiveNotificationRequestRaw(
+            method: "GET",
+            path: "live-notifications/\(liveNotificationId)",
+            body: Optional<EmptyBody>.none
+        )
+    }
+    
     /// `DELETE /core/projects/{project}/live-notifications/{id}/subscribers/{subscriberId}`
     func unsubscribe(
         liveNotificationId: String,

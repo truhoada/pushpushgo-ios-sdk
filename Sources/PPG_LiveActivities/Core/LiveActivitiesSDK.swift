@@ -156,23 +156,37 @@ public class LiveActivitiesSDK {
     ///    `activity.pushTokenUpdates` token via PUT `/subscribers/{id}/endpoint`
     ///    so subsequent `event:update` pushes can target this device.
     ///
+    /// **Late-subscriber bootstrap**: if the campaign is already ONGOING when
+    /// the device subscribes (e.g. user opens the app mid-match), no
+    /// push-to-start will arrive. 
+    ///
     /// - Parameters:
     ///   - type: The `ActivityAttributes` type matching the backend template
     ///     (e.g. `MatchActivityAttributes.self`).
     ///   - liveNotificationId: Identifier returned by the backend after the
     ///     match notification is created (`POST /football-match-tracking`).
+    ///   - onCampaignAlreadyActive: Optional closure for late-subscriber
+    ///     bootstrap. Receives raw JSON (`Data`) from `GET /live-notifications/{id}`.
+    ///     Return `(attributes, initialState)` to start the activity locally,
+    ///     or `nil` if the campaign is not yet active.
     ///   - onStatus: Lifecycle callback. Useful for diagnostics, in-app UI,
     ///     and forwarding errors. May fire from any thread.
     public func subscribe<T: ActivityAttributes>(
         _ type: T.Type,
         liveNotificationId: String,
+        onCampaignAlreadyActive: (@Sendable (_ payload: Data) async throws -> (T, T.ContentState)?)? = nil,
         onStatus: @escaping @Sendable (LiveNotificationSubscriptionStatus) -> Void
     ) {
         guard let manager = requireInitialized() else {
             onStatus(.error(.activitiesNotEnabled))
             return
         }
-        manager.subscribe(type, liveNotificationId: liveNotificationId, onStatus: onStatus)
+        manager.subscribe(
+            type,
+            liveNotificationId: liveNotificationId,
+            onCampaignAlreadyActive: onCampaignAlreadyActive,
+            onStatus: onStatus
+        )
     }
     
     /// Cancel an active subscription. Tears down local task observers and

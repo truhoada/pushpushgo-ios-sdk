@@ -148,6 +148,7 @@ internal class LiveActivityManager {
     func subscribe<T: ActivityAttributes>(
         _ type: T.Type,
         liveNotificationId: String,
+        onCampaignAlreadyActive: (@Sendable (Data) async throws -> (T, T.ContentState)?)? = nil,
         onStatus: @escaping @Sendable (LiveNotificationSubscriptionStatus) -> Void
     ) {
 
@@ -174,7 +175,8 @@ internal class LiveActivityManager {
             },
             onContentStateUpdated: { [weak self] activityId, state in
                 self?.scheduleHotMessageAutoClear(T.self, activityId: activityId, state: state)
-            }
+            },
+            onCampaignAlreadyActive: onCampaignAlreadyActive
         )
         subscribers[liveNotificationId] = subscriber
         subscriber.start()
