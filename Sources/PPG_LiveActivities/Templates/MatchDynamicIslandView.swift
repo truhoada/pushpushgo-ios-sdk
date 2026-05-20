@@ -60,7 +60,7 @@ public struct PPGMatchDynamicIsland {
     
     private var expandedLeading: some View {
         HStack(spacing: 6) {
-            teamBadge(url: context.attributes.homeTeamBadgeUrl, size: 28)
+            teamBadge(imageType: .homeTeamBadge, size: 28)
             
             VStack(alignment: .leading, spacing: 1) {
                 Text(context.attributes.homeTeamName)
@@ -90,7 +90,7 @@ public struct PPGMatchDynamicIsland {
                     .monospacedDigit()
             }
             
-            teamBadge(url: context.attributes.awayTeamBadgeUrl, size: 28)
+            teamBadge(imageType: .awayTeamBadge, size: 28)
         }
     }
     
@@ -113,44 +113,58 @@ public struct PPGMatchDynamicIsland {
     
     @ViewBuilder
     private var expandedBottom: some View {
-        // Hot message takes priority over CTA when active — same slot, last wins.
         if let hotMessage = context.state.hotMessage {
             PPGHotMessageView(
                 hotMessage: hotMessage,
                 activityID: context.activityID
             )
-        } else if let ctaText = context.attributes.ctaText, !ctaText.isEmpty {
-            if let ctaDeepLink = context.attributes.ctaDeepLink,
-               let url = URL(string: ctaDeepLink) {
-                Link(destination: url) {
-                    ctaLabel(text: ctaText)
+        } else if let action = context.attributes.firstCTAAction {
+            let appearance = action.design.ios.appearance.lightMode
+            let url: URL? = {
+                switch action {
+                case .url(_, let urlStr, _): return URL(string: urlStr)
+                case .openApp: return context.attributes.deepLink.flatMap(URL.init)
+                case .close: return nil
                 }
+            }()
+            if let url {
+                Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius) }
             } else {
-                ctaLabel(text: ctaText)
+                ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius)
             }
         }
     }
     
-    private func ctaLabel(text: String) -> some View {
-        Text(text)
+    private func ctaLabel(text: String, appearance: PPGActionIOSAppearance, cornerRadius: Double) -> some View {
+        let textColor: Color = {
+            if case .basic(let hex) = appearance.textColor { return Color(hex: hex) }
+            return .white
+        }()
+        let bgColor: Color? = {
+            guard let bg = appearance.backgroundColor else { return nil }
+            if case .basic(let hex) = bg { return Color(hex: hex) }
+            return nil
+        }()
+        return Text(text)
             .font(.caption2)
             .fontWeight(.semibold)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
-            .background(Color.blue.opacity(0.3))
-            .cornerRadius(8)
+            .background(bgColor ?? Color.blue.opacity(0.3))
+            .foregroundColor(textColor)
+            .cornerRadius(cornerRadius)
     }
     
     // Compact Views — badge(22) + score:score + badge(22) in leading, phase in trailing
     
     private var compactLeading: some View {
         HStack(spacing: 3) {
-            teamBadge(url: context.attributes.homeTeamBadgeUrl, size: 22)
+            teamBadge(imageType: .homeTeamBadge, size: 22)
             Text(context.state.scoreCompact)
                 .font(.caption)
                 .fontWeight(.bold)
                 .monospacedDigit()
-            teamBadge(url: context.attributes.awayTeamBadgeUrl, size: 22)
+            teamBadge(imageType: .awayTeamBadge, size: 22)
         }
     }
     
@@ -177,9 +191,9 @@ public struct PPGMatchDynamicIsland {
             .monospacedDigit()
     }
     
-    private func teamBadge(url: String?, size: CGFloat) -> some View {
+    private func teamBadge(imageType: PPGLiveActivityImageType, size: CGFloat) -> some View {
         Group {
-            if let image = LiveActivityImageManager.shared.loadImage(for: url) {
+            if let image = LiveActivityImageManager.shared.loadImage(imageType: imageType, campaignId: context.attributes.liveNotificationId) {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)

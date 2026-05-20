@@ -46,28 +46,41 @@ public struct PPGMatchLockScreenView: View {
             backgroundView
             
             VStack(spacing: 0) {
+                // Match title header
+                Text(context.attributes.title)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 16)
+                
+                // Teams + Score row
                 HStack(spacing: 0) {
-                    // Home team
                     teamView(
                         name: context.attributes.homeTeamName,
-                        badgeUrl: context.attributes.homeTeamBadgeUrl,
+                        imageType: .homeTeamBadge,
                         score: context.state.homeTeamScore,
                         alignment: .trailing
                     )
-                    
-                    // Center: score + phase
                     centerView
-                    
-                    // Away team
                     teamView(
                         name: context.attributes.awayTeamName,
-                        badgeUrl: context.attributes.awayTeamBadgeUrl,
+                        imageType: .awayTeamBadge,
                         score: context.state.awayTeamScore,
                         alignment: .leading
                     )
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.vertical, 8)
+                
+                // Action button (custom design + alignment)
+                if let action = context.attributes.firstCTAAction {
+                    actionRow(action)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                }
                 
                 // Hot message banner — transient, auto-hides after duration
                 if let hotMessage = context.state.hotMessage {
@@ -87,23 +100,21 @@ public struct PPGMatchLockScreenView: View {
     
     private func teamView(
         name: String,
-        badgeUrl: String?,
+        imageType: PPGLiveActivityImageType,
         score: Int,
         alignment: HorizontalAlignment
     ) -> some View {
-        VStack(alignment: alignment, spacing: 4) {
-            // Badge — loaded from shared App Group container
-            if let image = LiveActivityImageManager.shared.loadImage(for: badgeUrl) {
+        let campaignId = context.attributes.liveNotificationId
+        return VStack(alignment: .center, spacing: 4) {
+            if let image = LiveActivityImageManager.shared.loadImage(imageType: imageType, campaignId: campaignId) {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 48, height: 48)
                     .clipShape(Circle())
             } else {
                 teamBadgePlaceholder
             }
-            
-            // Team name
             Text(name)
                 .font(.caption2)
                 .fontWeight(.medium)
@@ -111,7 +122,7 @@ public struct PPGMatchLockScreenView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
-        .frame(minWidth: 60)
+        .frame(minWidth: 60, maxWidth: .infinity)
     }
     
     private var teamBadgePlaceholder: some View {
@@ -129,56 +140,101 @@ public struct PPGMatchLockScreenView: View {
     
     private var centerView: some View {
         VStack(spacing: 4) {
-            // Score
             Text(context.state.scoreDisplay)
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .monospacedDigit()
             
-            // Phase label
             HStack(spacing: 4) {
                 if phase.isPlaying {
                     Circle()
                         .fill(Color.green)
                         .frame(width: 6, height: 6)
                 }
-                
                 Text(context.attributes.label(for: phase))
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundColor(phase.color)
             }
-            
-            // CTA button
-            if let ctaText = context.attributes.ctaText,
-               !ctaText.isEmpty {
-                if let ctaDeepLink = context.attributes.ctaDeepLink,
-                   let url = URL(string: ctaDeepLink) {
-                    Link(destination: url) {
-                        ctaButton(text: ctaText)
-                    }
-                } else if let deepLink = context.attributes.deepLink,
-                          let url = URL(string: deepLink) {
-                    Link(destination: url) {
-                        ctaButton(text: ctaText)
-                    }
-                } else {
-                    ctaButton(text: ctaText)
-                }
-            }
         }
         .frame(maxWidth: .infinity)
     }
     
-    private func ctaButton(text: String) -> some View {
-        Text(text)
-            .font(.caption2)
+    // Action Row
+    
+    private func actionRow(_ action: PPGLiveActivityAction) -> some View {
+        HStack(spacing: 0) {
+            actionButtonAligned(action)
+        }
+    }
+    
+    @ViewBuilder
+    private func actionButtonAligned(_ action: PPGLiveActivityAction) -> some View {
+        switch action.design.ios.alignment {
+        case .left:
+            actionButton(action)
+            Spacer(minLength: 0)
+        case .right:
+            Spacer(minLength: 0)
+            actionButton(action)
+        case .center:
+            Spacer(minLength: 0)
+            actionButton(action)
+            Spacer(minLength: 0)
+        case .stretch:
+            actionButton(action).frame(maxWidth: .infinity)
+        }
+    }
+    
+    @ViewBuilder
+    private func actionButton(_ action: PPGLiveActivityAction) -> some View {
+        let design = action.design.ios
+        let appearance = colorScheme == .dark ? design.appearance.darkMode : design.appearance.lightMode
+        let url: URL? = {
+            switch action {
+            case .url(_, let urlStr, _): return URL(string: urlStr)
+            case .openApp: return context.attributes.deepLink.flatMap(URL.init)
+            case .close: return nil
+            }
+        }()
+        if let url {
+            Link(destination: url) {
+                styledLabel(text: action.name, appearance: appearance, cornerRadius: design.borderRadius)
+            }
+        } else {
+            styledLabel(text: action.name, appearance: appearance, cornerRadius: design.borderRadius)
+        }
+    }
+    
+    private func styledLabel(text: String, appearance: PPGActionIOSAppearance, cornerRadius: Double) -> some View {
+        let textColor: Color = {
+            if case .basic(let hex) = appearance.textColor { return Color(hex: hex) }
+            return .white
+        }()
+        let bgColor: Color? = {
+            guard let bg = appearance.backgroundColor else { return nil }
+            if case .basic(let hex) = bg { return Color(hex: hex) }
+            return nil
+        }()
+        let borderColor: Color? = {
+            guard let border = appearance.border, case .basic(let hex) = border.color else { return nil }
+            return Color(hex: hex)
+        }()
+        let borderWidth = appearance.border?.width ?? 0
+        return Text(text)
+            .font(.footnote)
             .fontWeight(.semibold)
-            .foregroundColor(.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-            .background(Color.blue.opacity(0.6))
-            .cornerRadius(12)
+            .foregroundColor(textColor)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 5)
+            .background(bgColor ?? .clear)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                if let borderColor {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(borderColor, lineWidth: borderWidth)
+                }
+            }
     }
     
 }

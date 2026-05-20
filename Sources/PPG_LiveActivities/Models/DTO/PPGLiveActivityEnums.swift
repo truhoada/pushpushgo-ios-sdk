@@ -27,6 +27,8 @@ public enum PPGLiveActivityLifecycleStatus: String, Codable, Sendable {
 @available(iOS 17.2, *)
 public enum PPGLiveActivityImageType: String, Codable, Sendable {
     case logo = "live_notification_logo"
+    case homeTeamBadge = "home_team_badge"
+    case awayTeamBadge = "away_team_badge"
 }
 
 /// Countdown shown before the activity goes live.

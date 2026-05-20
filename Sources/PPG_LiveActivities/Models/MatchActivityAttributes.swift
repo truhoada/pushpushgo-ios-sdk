@@ -294,8 +294,11 @@ public struct MatchActivityAttributes: ActivityAttributes {
     /// (comes from `configuration.url` in the APNs attributes payload).
     public var deepLink: String? { url }
     
-    /// Convenience CTA text — first URL action's name, if any.
-    public var ctaText: String? { firstUrlAction?.name }
+    /// First action of any type (URL, openApp, close) — used by views to render a CTA button.
+    public var firstCTAAction: PPGLiveActivityAction? { actionSet.first }
+    
+    /// Convenience CTA text — name of first action (any type).
+    public var ctaText: String? { firstCTAAction?.name }
     
     /// Convenience CTA deep link — first URL action's url, if any.
     public var ctaDeepLink: String? { firstUrlAction?.url }
