@@ -178,11 +178,14 @@ public struct PPGMatchLockScreenView: View {
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .monospacedDigit()
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
         } else {
             Text("0:00")
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .monospacedDigit()
+                .frame(maxWidth: .infinity)
         }
     }
     
@@ -208,12 +211,12 @@ public struct PPGMatchLockScreenView: View {
             actionButton(action)
             Spacer(minLength: 0)
         case .stretch:
-            actionButton(action).frame(maxWidth: .infinity)
+            actionButton(action, isStretched: true)
         }
     }
     
     @ViewBuilder
-    private func actionButton(_ action: PPGLiveActivityAction) -> some View {
+    private func actionButton(_ action: PPGLiveActivityAction, isStretched: Bool = false) -> some View {
         let design = action.design.ios
         let appearance = colorScheme == .dark ? design.appearance.darkMode : design.appearance.lightMode
         let url: URL? = {
@@ -225,14 +228,14 @@ public struct PPGMatchLockScreenView: View {
         }()
         if let url {
             Link(destination: url) {
-                styledLabel(text: action.name, appearance: appearance, cornerRadius: design.borderRadius)
+                styledLabel(text: action.name, appearance: appearance, cornerRadius: design.borderRadius, isStretched: isStretched)
             }
         } else {
-            styledLabel(text: action.name, appearance: appearance, cornerRadius: design.borderRadius)
+            styledLabel(text: action.name, appearance: appearance, cornerRadius: design.borderRadius, isStretched: isStretched)
         }
     }
     
-    private func styledLabel(text: String, appearance: PPGActionIOSAppearance, cornerRadius: Double) -> some View {
+    private func styledLabel(text: String, appearance: PPGActionIOSAppearance, cornerRadius: Double, isStretched: Bool = false) -> some View {
         let textColor: Color = {
             if case .basic(let hex) = appearance.textColor { return Color(hex: hex) }
             return .white
@@ -253,6 +256,7 @@ public struct PPGMatchLockScreenView: View {
             .foregroundColor(textColor)
             .padding(.horizontal, 16)
             .padding(.vertical, 5)
+            .frame(maxWidth: isStretched ? .infinity : nil)
             .background(bgColor ?? .clear)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {

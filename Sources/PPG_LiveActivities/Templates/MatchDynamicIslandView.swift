@@ -122,6 +122,7 @@ public struct PPGMatchDynamicIsland {
                 .font(.caption2)
                 .fontWeight(.semibold)
                 .monospacedDigit()
+                .multilineTextAlignment(.center)
                 .foregroundColor(.white)
         } else {
             Text("0:00")
