@@ -43,6 +43,13 @@ public struct MatchActivityAttributes: ActivityAttributes {
     /// Deep-link URL opened when the user taps the Live Activity background.
     public let url: String?
     
+    /// Target date for the pre-match countdown (= `startPolicy.scheduledAt`).
+    /// When non-nil and `status == .preMatch`, views show a countdown timer instead of the score.
+    public let countdownDate: Date?
+    
+    /// Message displayed beneath the countdown timer (e.g. "Match will start soon").
+    public let countdownMessage: String?
+    
     // ContentState (dynamic, updated in real-time via APNs `event:update`)
     
     public struct ContentState: Codable, Hashable {
@@ -62,16 +69,27 @@ public struct MatchActivityAttributes: ActivityAttributes {
         /// `hotMessage: nil` to clear it early.
         public let hotMessage: PPGHotMessage?
         
+        /// Target date for the pre-match countdown (= `startPolicy.scheduledAt`).
+        /// Sent by the backend in `aps.content-state` so it arrives for all subscriber types.
+        public let countdownDate: Date?
+        
+        /// Message shown beneath the countdown timer (e.g. "Match will start soon").
+        public let countdownMessage: String?
+        
         public init(
             homeTeamScore: Int,
             awayTeamScore: Int,
             status: MatchPhase,
-            hotMessage: PPGHotMessage? = nil
+            hotMessage: PPGHotMessage? = nil,
+            countdownDate: Date? = nil,
+            countdownMessage: String? = nil
         ) {
             self.homeTeamScore = homeTeamScore
             self.awayTeamScore = awayTeamScore
             self.status = status
             self.hotMessage = hotMessage
+            self.countdownDate = countdownDate
+            self.countdownMessage = countdownMessage
         }
         
         /// Human-readable phase display text
@@ -103,6 +121,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
                 )
                 hotMessage = nil
             }
+            countdownDate = try c.decodeIfPresent(Date.self, forKey: .countdownDate)
+            countdownMessage = try c.decodeIfPresent(String.self, forKey: .countdownMessage)
         }
         
         public func encode(to encoder: Encoder) throws {
@@ -111,10 +131,13 @@ public struct MatchActivityAttributes: ActivityAttributes {
             try c.encode(awayTeamScore, forKey: .awayTeamScore)
             try c.encode(status, forKey: .status)
             try c.encodeIfPresent(hotMessage, forKey: .hotMessage)
+            try c.encodeIfPresent(countdownDate, forKey: .countdownDate)
+            try c.encodeIfPresent(countdownMessage, forKey: .countdownMessage)
         }
         
         private enum CodingKeys: String, CodingKey {
             case homeTeamScore, awayTeamScore, status, hotMessage
+            case countdownDate, countdownMessage
         }
     }
     
@@ -128,7 +151,9 @@ public struct MatchActivityAttributes: ActivityAttributes {
         statusLabels: [String: String] = [:],
         actionSet: [PPGLiveActivityAction] = [],
         timeout: PPGLiveActivityTimeout,
-        url: String? = nil
+        url: String? = nil,
+        countdownDate: Date? = nil,
+        countdownMessage: String? = nil
     ) {
         self.liveNotificationId = liveNotificationId
         self.template = template
@@ -138,6 +163,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
         self.actionSet = actionSet
         self.timeout = timeout
         self.url = url
+        self.countdownDate = countdownDate
+        self.countdownMessage = countdownMessage
     }
     
     // Tolerant Codable
@@ -159,6 +186,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
         case actionSet, actions
         case timeout
         case url
+        case startPolicy
+        case countdownDate, countdownMessage
     }
     
     public init(from decoder: Decoder) throws {
@@ -198,6 +227,9 @@ public struct MatchActivityAttributes: ActivityAttributes {
             
             self.timeout = try c.decode(PPGLiveActivityTimeout.self, forKey: .timeout)
             self.url = try c.decodeIfPresent(String.self, forKey: .url)
+            let policy = try c.decodeIfPresent(StartPolicyCodable.self, forKey: .startPolicy)
+            self.countdownDate = try c.decodeIfPresent(Date.self, forKey: .countdownDate) ?? policy?.scheduledAt
+            self.countdownMessage = try c.decodeIfPresent(String.self, forKey: .countdownMessage) ?? policy?.countdown?.message
         } catch {
             // Dump all top-level keys present in the payload to help diagnose
             // schema mismatches between backend push payload and this model.
@@ -225,6 +257,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
         try c.encode(actionSet, forKey: .actionSet)
         try c.encode(timeout, forKey: .timeout)
         try c.encodeIfPresent(url, forKey: .url)
+        try c.encodeIfPresent(countdownDate, forKey: .countdownDate)
+        try c.encodeIfPresent(countdownMessage, forKey: .countdownMessage)
     }
     
     /// Decode `actionSet` (or legacy `actions`) tolerantly. If the backend
@@ -347,17 +381,21 @@ public struct MatchActivityAttributes: ActivityAttributes {
             liveNotificationId: dto.id,
             template: config.type,
             content: config.content,
-            design: config.design,
+            design: PPGFootballMatchDesign(android: nil, ios: PPGFootballMatchIOSDesign(statusBackgrounds: nil)),
             statusLabels: config.statusLabels,
             actionSet: config.actions,
             timeout: config.timeout,
-            url: config.url
+            url: config.url,
+            countdownDate: dto.startPolicy.scheduledAt,
+            countdownMessage: dto.startPolicy.countdown?.message
         )
         
         let state = ContentState(
             homeTeamScore: liveData.homeTeamScore,
             awayTeamScore: liveData.awayTeamScore,
-            status: liveData.status
+            status: liveData.status,
+            countdownDate: dto.startPolicy.scheduledAt,
+            countdownMessage: dto.startPolicy.countdown?.message
         )
         
         return (attributes, state)
@@ -366,6 +404,12 @@ public struct MatchActivityAttributes: ActivityAttributes {
 
 /// Pass-through `CodingKey` that accepts any string. Used to dump the top
 /// level keys present in a payload during decode-failure diagnostics.
+@available(iOS 17.2, *)
+private struct StartPolicyCodable: Codable {
+    let scheduledAt: Date
+    let countdown: PPGLiveActivityCountdown?
+}
+
 private struct DynamicCodingKey: CodingKey {
     var stringValue: String
     var intValue: Int? { nil }
@@ -382,7 +426,9 @@ extension MatchActivityAttributes.ContentState: PPGHotMessageCarrying {
             homeTeamScore: homeTeamScore,
             awayTeamScore: awayTeamScore,
             status: status,
-            hotMessage: nil
+            hotMessage: nil,
+            countdownDate: countdownDate,
+            countdownMessage: countdownMessage
         )
     }
 }

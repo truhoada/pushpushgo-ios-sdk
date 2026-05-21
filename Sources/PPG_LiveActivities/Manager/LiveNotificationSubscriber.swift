@@ -211,12 +211,6 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     /// forwarding exactly like a push-to-start activity.
     private func bootstrapIfCampaignActive() async {
         guard let onCampaignAlreadyActive else { return }
-        guard Activity<T>.activities.isEmpty else {
-            LiveActivityLogger.shared.debug(
-                "Bootstrap skipped — activity of type \(T.self) already running"
-            )
-            return
-        }
         do {
             let data = try await repository.fetchCampaign(liveNotificationId: liveNotificationId)
             guard let (attrs, state) = try await onCampaignAlreadyActive(data) else {
@@ -225,18 +219,27 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 )
                 return
             }
-            guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-            let activity = try Activity.request(
-                attributes: attrs,
-                content: .init(state: state, staleDate: nil),
-                pushType: .token
-            )
-            LiveActivityLogger.shared.info(
-                "Bootstrap: started activity \(activity.id) for \(liveNotificationId)"
-            )
-            onActivityAppeared?(activity.id, liveNotificationId)
-            statusHandler(.activityStarted(activityId: activity.id))
-            trackActivity(activity)
+            if let existing = Activity<T>.activities.first {
+                // Activity was already started by APNs push-to-start (possibly without countdown
+                // or other REST-only fields). Patch its ContentState with the full state from REST.
+                await existing.update(ActivityContent(state: state, staleDate: nil))
+                LiveActivityLogger.shared.info(
+                    "Bootstrap: patched existing activity \(existing.id) with REST state for \(liveNotificationId)"
+                )
+            } else {
+                guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+                let activity = try Activity.request(
+                    attributes: attrs,
+                    content: .init(state: state, staleDate: nil),
+                    pushType: .token
+                )
+                LiveActivityLogger.shared.info(
+                    "Bootstrap: started activity \(activity.id) for \(liveNotificationId)"
+                )
+                onActivityAppeared?(activity.id, liveNotificationId)
+                statusHandler(.activityStarted(activityId: activity.id))
+                trackActivity(activity)
+            }
         } catch {
             LiveActivityLogger.shared.error(
                 "Bootstrap failed for \(liveNotificationId): \(error.localizedDescription)"

@@ -140,10 +140,15 @@ public struct PPGMatchLockScreenView: View {
     
     private var centerView: some View {
         VStack(spacing: 4) {
-            Text(context.state.scoreDisplay)
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-                .monospacedDigit()
+            let countdownDate = context.state.countdownDate ?? context.attributes.countdownDate
+            if phase == .preMatch, let countdownDate {
+                countdownTimer(until: countdownDate)
+            } else {
+                Text(context.state.scoreDisplay)
+                    .font(.system(size: 32, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .monospacedDigit()
+            }
             
             HStack(spacing: 4) {
                 if phase.isPlaying {
@@ -151,13 +156,34 @@ public struct PPGMatchLockScreenView: View {
                         .fill(Color.green)
                         .frame(width: 6, height: 6)
                 }
-                Text(context.attributes.label(for: phase))
+                Text(statusLabel)
                     .font(.caption)
                     .fontWeight(.medium)
                     .foregroundColor(phase.color)
             }
         }
         .frame(maxWidth: .infinity)
+    }
+    
+    private var statusLabel: String {
+        let msg = context.state.countdownMessage ?? context.attributes.countdownMessage
+        if phase == .preMatch, let msg { return msg }
+        return context.attributes.label(for: phase)
+    }
+    
+    @ViewBuilder
+    private func countdownTimer(until date: Date) -> some View {
+        if date > Date.now {
+            Text(timerInterval: Date.now...date, countsDown: true)
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .monospacedDigit()
+        } else {
+            Text("0:00")
+                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .monospacedDigit()
+        }
     }
     
     // Action Row

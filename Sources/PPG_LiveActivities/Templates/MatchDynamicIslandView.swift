@@ -96,18 +96,39 @@ public struct PPGMatchDynamicIsland {
     
     private var expandedCenter: some View {
         VStack(spacing: 2) {
-            HStack(spacing: 4) {
-                if phase.isPlaying {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 5, height: 5)
+            let countdownDate = context.state.countdownDate ?? context.attributes.countdownDate
+            if phase == .preMatch, let countdownDate {
+                diCountdownTimer(until: countdownDate)
+            } else {
+                HStack(spacing: 4) {
+                    if phase.isPlaying {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 5, height: 5)
+                    }
+                    Text(context.attributes.label(for: phase))
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundColor(phase.color)
                 }
-                
-                Text(context.attributes.label(for: phase))
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundColor(phase.color)
             }
+        }
+    }
+    
+    @ViewBuilder
+    private func diCountdownTimer(until date: Date) -> some View {
+        if date > Date.now {
+            Text(timerInterval: Date.now...date, countsDown: true)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .monospacedDigit()
+                .foregroundColor(.white)
+        } else {
+            Text("0:00")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .monospacedDigit()
+                .foregroundColor(.white)
         }
     }
     
@@ -160,10 +181,15 @@ public struct PPGMatchDynamicIsland {
     private var compactLeading: some View {
         HStack(spacing: 3) {
             teamBadge(imageType: .homeTeamBadge, size: 22)
-            Text(context.state.scoreCompact)
-                .font(.caption)
-                .fontWeight(.bold)
-                .monospacedDigit()
+            let countdownDateCompact = context.state.countdownDate ?? context.attributes.countdownDate
+            if phase == .preMatch, let countdownDateCompact {
+                diCountdownTimer(until: countdownDateCompact)
+            } else {
+                Text(context.state.scoreCompact)
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .monospacedDigit()
+            }
             teamBadge(imageType: .awayTeamBadge, size: 22)
         }
     }
