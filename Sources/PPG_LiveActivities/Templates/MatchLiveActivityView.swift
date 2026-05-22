@@ -46,15 +46,30 @@ public struct PPGMatchLockScreenView: View {
             backgroundView
             
             VStack(spacing: 0) {
-                // Match title header
-                Text(context.attributes.title)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 8)
-                    .padding(.horizontal, 16)
+                // Match title header — left spacer + right clock both conditional on same flag
+                HStack(spacing: 0) {
+                    if context.state.showsMatchClock {
+                        Color.clear.frame(width: 68)
+                    }
+                    Text(context.attributes.title)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                    if context.state.showsMatchClock,
+                       let clockStart = context.state.matchClockStartDate {
+                        clockText(clockStart: clockStart)
+                            .monospacedDigit()
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white.opacity(0.9))
+                            .lineLimit(1)
+                            .frame(width: 68, alignment: .trailing)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.horizontal, 16)
                 
                 // Teams + Score row
                 HStack(spacing: 0) {
@@ -116,7 +131,7 @@ public struct PPGMatchLockScreenView: View {
                 teamBadgePlaceholder
             }
             Text(name)
-                .font(.caption2)
+                .font(.caption)
                 .fontWeight(.medium)
                 .foregroundColor(.white.opacity(0.8))
                 .lineLimit(1)
@@ -163,6 +178,17 @@ public struct PPGMatchLockScreenView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+    
+    
+    private func clockText(clockStart: Date) -> Text {
+        let timer = Text(timerInterval: clockStart...clockStart.addingTimeInterval(500 * 60),
+                         countsDown: false,
+                         showsHours: false) + Text("'")
+        if let prefix = context.state.matchMinutePrefix {
+            return Text(prefix) + timer
+        }
+        return timer
     }
     
     private var statusLabel: String {

@@ -17,17 +17,22 @@ public struct PPGFootballMatchLiveData: Codable, Sendable, Hashable {
     public let homeTeamScore: Int
     public let awayTeamScore: Int
     public let status: MatchPhase
+    /// Timestamp when the current status was last changed (ISO-8601).
+    /// Used client-side to calculate the current match minute.
+    public let statusChangedAt: Date?
     
     public init(
         type: PPGLiveActivityTemplate = .footballMatchTracking,
         homeTeamScore: Int,
         awayTeamScore: Int,
-        status: MatchPhase
+        status: MatchPhase,
+        statusChangedAt: Date? = nil
     ) {
         self.type = type
         self.homeTeamScore = homeTeamScore
         self.awayTeamScore = awayTeamScore
         self.status = status
+        self.statusChangedAt = statusChangedAt
     }
 }
 

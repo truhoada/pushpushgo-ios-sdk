@@ -202,10 +202,24 @@ public struct PPGMatchDynamicIsland {
                     .fill(Color.green)
                     .frame(width: 5, height: 5)
             }
-            Text(phase.shortText)
-                .font(.caption2)
-                .fontWeight(.semibold)
-                .foregroundColor(phase.color)
+            if context.state.showsMatchClock, let clockStart = context.state.matchClockStartDate {
+                let timer = Text(timerInterval: clockStart...clockStart.addingTimeInterval(500 * 60),
+                                 countsDown: false,
+                                 showsHours: false) + Text("'")
+                let combined: Text = context.state.matchMinutePrefix.map { Text($0) + timer } ?? timer
+                combined
+                    .monospacedDigit()
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(phase.color)
+                    .lineLimit(1)
+                    .fixedSize()
+            } else {
+                Text(phase.shortText)
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(phase.color)
+            }
         }
     }
     

@@ -76,13 +76,18 @@ public struct MatchActivityAttributes: ActivityAttributes {
         /// Message shown beneath the countdown timer (e.g. "Match will start soon").
         public let countdownMessage: String?
         
+        /// Timestamp when the current `status` was last changed.
+        /// Used to compute the live match minute client-side.
+        public let statusChangedAt: Date?
+        
         public init(
             homeTeamScore: Int,
             awayTeamScore: Int,
             status: MatchPhase,
             hotMessage: PPGHotMessage? = nil,
             countdownDate: Date? = nil,
-            countdownMessage: String? = nil
+            countdownMessage: String? = nil,
+            statusChangedAt: Date? = nil
         ) {
             self.homeTeamScore = homeTeamScore
             self.awayTeamScore = awayTeamScore
@@ -90,6 +95,67 @@ public struct MatchActivityAttributes: ActivityAttributes {
             self.hotMessage = hotMessage
             self.countdownDate = countdownDate
             self.countdownMessage = countdownMessage
+            self.statusChangedAt = statusChangedAt
+        }
+        
+        /// Prefix added in front of the live `Text(timerInterval:)` clock for
+        /// added-time phases (e.g. `"45+"` in `"45+2:13"`). `nil` for regular halves
+        /// where the timer counts up from 0 directly, and for non-playing phases.
+        public var matchMinutePrefix: String? {
+            switch status {
+            case .firstHalfAddedTime:           return "45+"
+            case .secondHalfAddedTime:          return "90+"
+            case .extraTimeFirstHalfAddedTime:  return "105+"
+            case .extraTimeSecondHalfAddedTime: return "120+"
+            default:                            return nil
+            }
+        }
+        
+        /// Whether to render the live `Text(timerInterval:)` match clock alongside
+        /// the status label. `true` for any phase where the ball is in play.
+        public var showsMatchClock: Bool {
+            statusChangedAt != nil && status.isPlaying && status != .penaltyShootout
+        }
+        
+        /// Reference date for the live `Text(timerInterval:)` clock.
+        /// For regular halves it's shifted into the past so the displayed elapsed
+        /// time matches the total match minute (e.g. 2nd half kickoff shows `45:00`,
+        /// not `00:00`). For added time phases the timer counts up from 0 and the
+        /// caller prefixes `matchMinutePrefix` ("45+", "90+", ...) in front of it.
+        public var matchClockStartDate: Date? {
+            guard let changedAt = statusChangedAt else { return nil }
+            let offsetMinutes: Int
+            switch status {
+            case .firstHalf:                      offsetMinutes = 0
+            case .firstHalfAddedTime:             offsetMinutes = 0
+            case .secondHalf:                     offsetMinutes = -45
+            case .secondHalfAddedTime:            offsetMinutes = 0
+            case .extraTimeFirstHalf:             offsetMinutes = -90
+            case .extraTimeFirstHalfAddedTime:    offsetMinutes = 0
+            case .extraTimeSecondHalf:            offsetMinutes = -105
+            case .extraTimeSecondHalfAddedTime:   offsetMinutes = 0
+            default: return nil
+            }
+            return changedAt.addingTimeInterval(TimeInterval(offsetMinutes * 60))
+        }
+        
+        /// Current match minute string (e.g. "23'" or "45+2'") at a given reference
+        /// date, computed from `statusChangedAt` and `status`. Returns `nil` for
+        /// non-playing phases or when `statusChangedAt` is unavailable.
+        public func matchMinuteText(at date: Date = .now) -> String? {
+            guard let changedAt = statusChangedAt else { return nil }
+            let elapsed = Int(max(0, date.timeIntervalSince(changedAt)) / 60) + 1
+            switch status {
+            case .firstHalf:                      return "\(min(elapsed, 45))'"
+            case .firstHalfAddedTime:             return "45+\(elapsed)'"
+            case .secondHalf:                     return "\(min(45 + elapsed, 90))'"
+            case .secondHalfAddedTime:            return "90+\(elapsed)'"
+            case .extraTimeFirstHalf:             return "\(min(90 + elapsed, 105))'"
+            case .extraTimeFirstHalfAddedTime:    return "105+\(elapsed)'"
+            case .extraTimeSecondHalf:            return "\(min(105 + elapsed, 120))'"
+            case .extraTimeSecondHalfAddedTime:   return "120+\(elapsed)'"
+            default:                              return nil
+            }
         }
         
         /// Human-readable phase display text
@@ -121,8 +187,24 @@ public struct MatchActivityAttributes: ActivityAttributes {
                 )
                 hotMessage = nil
             }
-            countdownDate = try c.decodeIfPresent(Date.self, forKey: .countdownDate)
+            countdownDate = Self.decodeDateField(from: c, key: .countdownDate)
             countdownMessage = try c.decodeIfPresent(String.self, forKey: .countdownMessage)
+            statusChangedAt = Self.decodeDateField(from: c, key: .statusChangedAt)
+        }
+        
+        /// Decode a Date that may arrive as an ISO-8601 string (backend APNs) or as a
+        /// Double Unix timestamp (ActivityKit's internal round-trip after `activity.update()`).
+        private static func decodeDateField(
+            from c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys
+        ) -> Date? {
+            if let raw = try? c.decodeIfPresent(String.self, forKey: key) {
+                let f = ISO8601DateFormatter()
+                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let d = f.date(from: raw) { return d }
+                f.formatOptions = [.withInternetDateTime]
+                return f.date(from: raw)
+            }
+            return try? c.decodeIfPresent(Date.self, forKey: key)
         }
         
         public func encode(to encoder: Encoder) throws {
@@ -133,11 +215,13 @@ public struct MatchActivityAttributes: ActivityAttributes {
             try c.encodeIfPresent(hotMessage, forKey: .hotMessage)
             try c.encodeIfPresent(countdownDate, forKey: .countdownDate)
             try c.encodeIfPresent(countdownMessage, forKey: .countdownMessage)
+            try c.encodeIfPresent(statusChangedAt, forKey: .statusChangedAt)
         }
         
         private enum CodingKeys: String, CodingKey {
             case homeTeamScore, awayTeamScore, status, hotMessage
             case countdownDate, countdownMessage
+            case statusChangedAt
         }
     }
     
@@ -395,7 +479,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
             awayTeamScore: liveData.awayTeamScore,
             status: liveData.status,
             countdownDate: dto.startPolicy.scheduledAt,
-            countdownMessage: dto.startPolicy.countdown?.message
+            countdownMessage: dto.startPolicy.countdown?.message,
+            statusChangedAt: liveData.statusChangedAt
         )
         
         return (attributes, state)

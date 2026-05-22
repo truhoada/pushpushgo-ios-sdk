@@ -230,7 +230,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
                 let activity = try Activity.request(
                     attributes: attrs,
-                    content: .init(state: state, staleDate: nil),
+                    content: ActivityContent(state: state, staleDate: nil, relevanceScore: 50),
                     pushType: .token
                 )
                 LiveActivityLogger.shared.info(
