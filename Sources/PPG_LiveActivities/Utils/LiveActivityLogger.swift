@@ -36,24 +36,20 @@ internal class LiveActivityLogger {
     func debug(_ message: String) {
         guard isDebugEnabled else { return }
         osLog.debug("\(message, privacy: .public)")
-        print("[\(tag)] 🔍 \(message)")
     }
     
     /// Log info messages
     func info(_ message: String) {
         osLog.info("\(message, privacy: .public)")
-        print("[\(tag)] ℹ️ \(message)")
     }
     
     /// Log warning messages
     func warning(_ message: String) {
         osLog.warning("\(message, privacy: .public)")
-        print("[\(tag)] ⚠️ \(message)")
     }
     
     /// Log error messages
     func error(_ message: String) {
         osLog.error("\(message, privacy: .public)")
-        print("[\(tag)] ❌ \(message)")
     }
 }

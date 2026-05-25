@@ -465,7 +465,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             liveNotificationId: dto.id,
             template: config.type,
             content: config.content,
-            design: PPGFootballMatchDesign(android: nil, ios: PPGFootballMatchIOSDesign(statusBackgrounds: nil)),
+            design: PPGFootballMatchDesign(ios: config.design.ios),
             statusLabels: config.statusLabels,
             actionSet: config.actions,
             timeout: config.timeout,
@@ -516,4 +516,11 @@ extension MatchActivityAttributes.ContentState: PPGHotMessageCarrying {
             countdownMessage: countdownMessage
         )
     }
+}
+
+// PPGLiveActivityDesignCacheable
+
+@available(iOS 17.2, *)
+extension MatchActivityAttributes: PPGLiveActivityDesignCacheable {
+    public var iosDesign: PPGFootballMatchIOSDesign { design.ios }
 }

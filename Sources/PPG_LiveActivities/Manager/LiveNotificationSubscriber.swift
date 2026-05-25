@@ -150,6 +150,10 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                     "Push-to-start token [\(self.liveNotificationId)]: \(tokenHex)"
                 )
                 self.lastRemoteStartToken = tokenHex
+                // Only POST once — if we already have a subscriberId, the
+                // backend knows this device. Subsequent token rotations are
+                // forwarded via PUT /endpoint when the update-token changes.
+                guard self.subscriberId == nil else { continue }
                 await self.registerWithBackend(remoteStartToken: tokenHex)
             }
         }
@@ -219,6 +223,16 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 )
                 return
             }
+            // Cache the iOS design from the REST response — APNs push-to-start delivers
+            // `"design":{"ios":{}}` (empty) and ActivityKit attributes are immutable,
+            // so the widget reads design from this shared-container cache instead.
+            if let cacheable = attrs as? any PPGLiveActivityDesignCacheable {
+                LiveActivityDesignStore.shared.cacheDesign(
+                    cacheable.iosDesign,
+                    liveNotificationId: liveNotificationId
+                )
+            }
+            
             if let existing = Activity<T>.activities.first {
                 // Activity was already started by APNs push-to-start (possibly without countdown
                 // or other REST-only fields). Patch its ContentState with the full state from REST.
@@ -257,6 +271,11 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 if Task.isCancelled { break }
                 
                 let activityId = activity.id
+                
+                // activityUpdates fires on every ContentState change too — only
+                // treat the activity as "new" if we are not already tracking it.
+                guard self.trackedActivities[activityId] == nil else { continue }
+                
                 LiveActivityLogger.shared.info(
                     "Activity appeared [\(self.liveNotificationId)]: \(activityId)"
                 )

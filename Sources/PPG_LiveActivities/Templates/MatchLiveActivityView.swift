@@ -24,10 +24,14 @@ public struct PPGMatchLockScreenView: View {
     private var phase: MatchPhase { context.state.status }
     
     /// Background for the current match phase — uses backend-provided
-    /// `statusBackgrounds` when available, falls back to the built-in gradient.
+    /// `statusBackgrounds` when available, falls back to the design cache
+    /// (populated from the REST bootstrap GET), then to the built-in gradient.
     @ViewBuilder
     private var backgroundView: some View {
-        if let colorSet = context.attributes.background(for: phase) {
+        let liveNotifId = context.attributes.liveNotificationId
+        let colorSet = context.attributes.background(for: phase)
+            ?? LiveActivityDesignStore.shared.background(for: phase, liveNotificationId: liveNotifId)
+        if let colorSet {
             colorSet.view(for: colorScheme)
         } else {
             LinearGradient(

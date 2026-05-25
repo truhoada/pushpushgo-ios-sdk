@@ -56,6 +56,7 @@ public class LiveActivitiesSDK {
         LiveActivityImageManager.shared.cleanExpiredAssets()
         
         HotMessageStore.shared.configure(appGroupId: appGroupId)
+        LiveActivityDesignStore.shared.configure(appGroupId: appGroupId)
         
         PushSDKBridge.updateLAPermissionLabel(ActivityAuthorizationInfo().areActivitiesEnabled)
         
@@ -79,6 +80,7 @@ public class LiveActivitiesSDK {
     public static func configureWidgetExtension(appGroupId: String) {
         LiveActivityImageManager.shared.configure(appGroupId: appGroupId)
         HotMessageStore.shared.configure(appGroupId: appGroupId)
+        LiveActivityDesignStore.shared.configure(appGroupId: appGroupId)
     }
     
     // Generic Lifecycle API
