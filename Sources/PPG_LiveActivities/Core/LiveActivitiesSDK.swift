@@ -7,6 +7,7 @@
 
 import Foundation
 import ActivityKit
+import UIKit
 
 /// Main entry point for the PushPushGo Live Activities SDK.
 
@@ -196,6 +197,56 @@ public class LiveActivitiesSDK {
     public func unsubscribe(liveNotificationId: String) {
         guard let manager = requireInitialized() else { return }
         manager.unsubscribe(liveNotificationId: liveNotificationId)
+    }
+    
+    // URL routing
+    
+    /// SDK-owned URL scheme used by CLOSE-type action buttons.
+    /// Add this to your app's `CFBundleURLTypes` in Info.plist once:
+    /// `<string>ppg-la</string>`
+    public static let urlScheme = "ppg-la"
+    
+    /// Handle a URL delivered to the host app from a Live Activity action button
+    /// or a body-tap `widgetURL`.
+    ///
+    /// Call this from your `onOpenURL` handler (SwiftUI) or
+    /// `application(_:open:options:)` (UIKit). Returns `true` if the SDK
+    /// handled the URL, or `false` if it is a custom-scheme deep link
+    /// the app should route itself.
+    ///
+    /// - `http`/`https` — opened directly in the default browser.
+    /// - `ppg-la://close?id=<liveNotificationId>` — emitted by CLOSE action
+    ///   buttons; SDK calls `closeHandler` so the host app can end the activity.
+    ///
+    /// ```swift
+    /// .onOpenURL { url in
+    ///     if !LiveActivitiesSDK.handleURL(url, closeHandler: { id in
+    ///         LiveActivitiesSDK.shared.endAllActivities(ofType: MatchActivityAttributes.self)
+    ///     }) {
+    ///         // handle your own deep-link scheme here
+    ///     }
+    /// }
+    /// ```
+    @discardableResult
+    public static func handleURL(
+        _ url: URL,
+        closeHandler: ((String) -> Void)? = nil
+    ) -> Bool {
+        guard let scheme = url.scheme?.lowercased() else { return false }
+        
+        if scheme == "http" || scheme == "https" {
+            UIApplication.shared.open(url)
+            return true
+        }
+        
+        if scheme == "ppg-la", url.host?.lowercased() == "close" {
+            let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            let liveNotifId = comps?.queryItems?.first(where: { $0.name == "id" })?.value ?? ""
+            closeHandler?(liveNotifId)
+            return true
+        }
+        
+        return false
     }
     
     // Initialization guard (DRY)

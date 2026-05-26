@@ -146,7 +146,10 @@ public struct PPGMatchDynamicIsland {
                 switch action {
                 case .url(_, let urlStr, _): return URL(string: urlStr)
                 case .openApp: return context.attributes.deepLink.flatMap(URL.init)
-                case .close: return nil
+                case .close:
+                    let encoded = context.attributes.liveNotificationId
+                        .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                    return URL(string: "ppg-la://close?id=\(encoded)")
                 }
             }()
             if let url {
