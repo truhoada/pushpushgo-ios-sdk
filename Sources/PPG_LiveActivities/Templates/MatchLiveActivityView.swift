@@ -25,7 +25,10 @@ public struct PPGMatchLockScreenView: View {
     
     /// Background for the current match phase — uses backend-provided
     /// `statusBackgrounds` when available, falls back to the design cache
-    /// (populated from the REST bootstrap GET), then to the built-in gradient.
+    /// (populated from the REST bootstrap GET). When neither is set
+    /// (backend sent `statusBackgrounds:null` — "device system" mode),
+    /// renders `Color.clear` so iOS shows its system-adaptive Live Activity
+    /// background which auto-adjusts to light/dark mode.
     @ViewBuilder
     private var backgroundView: some View {
         let liveNotifId = context.attributes.liveNotificationId
@@ -34,14 +37,7 @@ public struct PPGMatchLockScreenView: View {
         if let colorSet {
             colorSet.view(for: colorScheme)
         } else {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.33, green: 0.80, blue: 0.47),   // emerald green
-                    Color(red: 0.35, green: 0.0, blue: 0.55)     // vivid purple
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
+            Color.clear
         }
     }
     
