@@ -140,22 +140,26 @@ public struct PPGMatchDynamicIsland {
                 hotMessage: hotMessage,
                 activityID: context.activityID
             )
-        } else if let action = context.attributes.firstCTAAction {
-            let appearance = action.design.ios.appearance.lightMode
-            let url: URL? = {
-                switch action {
-                case .url(_, let urlStr, _): return URL(string: urlStr)
-                case .openApp: return context.attributes.deepLink.flatMap(URL.init)
-                case .close:
-                    let encoded = context.attributes.liveNotificationId
-                        .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                    return URL(string: "ppg-la://close?id=\(encoded)")
+        } else if !context.attributes.actionSet.isEmpty {
+            HStack(spacing: 8) {
+                ForEach(context.attributes.actionSet.prefix(2), id: \.name) { action in
+                    let appearance = action.design.ios.appearance.lightMode
+                    let url: URL? = {
+                        switch action {
+                        case .url(_, let urlStr, _): return URL(string: urlStr)
+                        case .openApp: return context.attributes.deepLink.flatMap(URL.init)
+                        case .close:
+                            let encoded = context.attributes.liveNotificationId
+                                .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                            return URL(string: "ppg-la://close?id=\(encoded)")
+                        }
+                    }()
+                    if let url {
+                        Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius) }
+                    } else {
+                        ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius)
+                    }
                 }
-            }()
-            if let url {
-                Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius) }
-            } else {
-                ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius)
             }
         }
     }

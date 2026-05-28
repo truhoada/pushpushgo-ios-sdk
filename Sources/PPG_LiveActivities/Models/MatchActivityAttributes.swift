@@ -470,7 +470,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             actionSet: config.actions,
             timeout: config.timeout,
             url: config.url,
-            countdownDate: dto.startPolicy.scheduledAt,
+            countdownDate: dto.startPolicy.countdown != nil ? dto.startPolicy.scheduledAt : nil,
             countdownMessage: dto.startPolicy.countdown?.message
         )
         
@@ -478,7 +478,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             homeTeamScore: liveData.homeTeamScore,
             awayTeamScore: liveData.awayTeamScore,
             status: liveData.status,
-            countdownDate: dto.startPolicy.scheduledAt,
+            countdownDate: dto.startPolicy.countdown != nil ? dto.startPolicy.scheduledAt : nil,
             countdownMessage: dto.startPolicy.countdown?.message,
             statusChangedAt: liveData.statusChangedAt
         )

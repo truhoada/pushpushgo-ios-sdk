@@ -90,11 +90,15 @@ public struct PPGMatchLockScreenView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 
-                // Action button (custom design + alignment)
-                if let action = context.attributes.firstCTAAction {
-                    actionRow(action)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 8)
+                // Action buttons (custom design + alignment) - render up to 2
+                if !context.attributes.actionSet.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(context.attributes.actionSet.prefix(2), id: \.name) { action in
+                            actionRow(action)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
                 }
                 
                 // Hot message banner — transient, auto-hides after duration
