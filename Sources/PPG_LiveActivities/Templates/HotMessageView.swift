@@ -50,23 +50,19 @@ public struct PPGHotMessageView: View {
     
     private var messageBanner: some View {
         HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white)
-            
             Text(hotMessage.text)
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
                 .lineLimit(2)
                 .minimumScaleFactor(0.8)
-            
-            Spacer(minLength: 0)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 20, bottomTrailingRadius: 20, topTrailingRadius: 0, style: .continuous)
                 .fill(Color.black.opacity(0.45))
         )
     }

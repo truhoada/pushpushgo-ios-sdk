@@ -46,6 +46,16 @@ public struct PPGMatchLockScreenView: View {
             backgroundView
             
             VStack(spacing: 0) {
+                // Hot message banner — transient, auto-hides after duration
+                if let hotMessage = context.state.hotMessage {
+                    PPGHotMessageView(
+                        hotMessage: hotMessage,
+                        activityID: context.activityID
+                    )
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                }
+                
                 // Match title header — left spacer + right clock both conditional on same flag
                 HStack(spacing: 0) {
                     if context.state.showsMatchClock {
@@ -98,16 +108,6 @@ public struct PPGMatchLockScreenView: View {
                         }
                     }
                     .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-                }
-                
-                // Hot message banner — transient, auto-hides after duration
-                if let hotMessage = context.state.hotMessage {
-                    PPGHotMessageView(
-                        hotMessage: hotMessage,
-                        activityID: context.activityID
-                    )
-                    .padding(.horizontal, 12)
                     .padding(.bottom, 8)
                 }
             }
