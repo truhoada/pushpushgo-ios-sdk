@@ -100,6 +100,37 @@ internal class LiveActivityRepository {
             body: Optional<EmptyBody>.none
         )
     }
+
+    // Statistics events
+
+    /// `POST /v1/ios/projects/{project}/live-notifications/{id}/events`
+    /// Reports Live Activity statistics events (started / closed / clicked…).
+    /// Note this is a different API surface than the `/core/...` subscriber
+    /// endpoints above, hence its own request builder.
+    func collectEvents(
+        liveNotificationId: String,
+        installationId: String,
+        subscriberId: String,
+        events: [PPGLiveNotificationStatisticsEvent]
+    ) async throws {
+        let body = PPGCollectLiveNotificationStatisticsRequest(
+            installationId: installationId,
+            subscriberId: subscriberId,
+            events: events
+        )
+        guard let url = URL(string: "\(baseURL)/v1/ios/projects/\(projectId)/live-notifications/\(liveNotificationId)/events") else {
+            throw LiveActivityError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "X-Token")
+        guard let encoded = try? JSONEncoder().encode(body) else {
+            throw LiveActivityError.encodingFailed
+        }
+        request.httpBody = encoded
+        _ = try await performRequest(request)
+    }
     
     // Shared HTTP logic
     
@@ -168,6 +199,13 @@ internal class LiveActivityRepository {
         body: T?
     ) async throws -> Data {
         let request = try buildLiveNotificationRequest(method: method, path: path, body: body)
+        return try await performRequest(request)
+    }
+
+    /// Send a prepared `URLRequest`, log request/response bodies and validate
+    /// the HTTP status. Shared by every endpoint regardless of base path.
+    private func performRequest(_ request: URLRequest) async throws -> Data {
+        let method = request.httpMethod ?? "GET"
         if let bodyData = request.httpBody,
            let bodyString = String(data: bodyData, encoding: .utf8) {
             LiveActivityLogger.shared.debug(

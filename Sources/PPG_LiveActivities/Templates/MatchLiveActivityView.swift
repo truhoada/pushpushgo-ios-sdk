@@ -103,8 +103,8 @@ public struct PPGMatchLockScreenView: View {
                 // Action buttons (custom design + alignment) - render up to 2
                 if !context.attributes.actionSet.isEmpty {
                     HStack(spacing: 8) {
-                        ForEach(context.attributes.actionSet.prefix(2), id: \.name) { action in
-                            actionRow(action)
+                        ForEach(Array(context.attributes.actionSet.prefix(2).enumerated()), id: \.offset) { index, action in
+                            actionRow(action, index: index)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -112,7 +112,12 @@ public struct PPGMatchLockScreenView: View {
                 }
             }
         }
-        .widgetURL(context.attributes.deepLink.flatMap(URL.init))
+        .widgetURL(LiveActivityClickURL.make(
+            liveNotificationId: context.attributes.liveNotificationId,
+            type: .clicked,
+            liveDataVersion: context.state.liveDataVersion,
+            destination: context.attributes.deepLink.flatMap(URL.init)
+        ))
         .activitySystemActionForegroundColor(.white)
     }
     
@@ -222,35 +227,35 @@ public struct PPGMatchLockScreenView: View {
     
     // Action Row
     
-    private func actionRow(_ action: PPGLiveActivityAction) -> some View {
+    private func actionRow(_ action: PPGLiveActivityAction, index: Int) -> some View {
         HStack(spacing: 0) {
-            actionButtonAligned(action)
+            actionButtonAligned(action, index: index)
         }
     }
-    
+
     @ViewBuilder
-    private func actionButtonAligned(_ action: PPGLiveActivityAction) -> some View {
+    private func actionButtonAligned(_ action: PPGLiveActivityAction, index: Int) -> some View {
         switch action.design.ios.alignment {
         case .left:
-            actionButton(action)
+            actionButton(action, index: index)
             Spacer(minLength: 0)
         case .right:
             Spacer(minLength: 0)
-            actionButton(action)
+            actionButton(action, index: index)
         case .center:
             Spacer(minLength: 0)
-            actionButton(action)
+            actionButton(action, index: index)
             Spacer(minLength: 0)
         case .stretch:
-            actionButton(action, isStretched: true)
+            actionButton(action, index: index, isStretched: true)
         }
     }
-    
+
     @ViewBuilder
-    private func actionButton(_ action: PPGLiveActivityAction, isStretched: Bool = false) -> some View {
+    private func actionButton(_ action: PPGLiveActivityAction, index: Int, isStretched: Bool = false) -> some View {
         let design = action.design.ios
         let appearance = colorScheme == .dark ? design.appearance.darkMode : design.appearance.lightMode
-        let url: URL? = {
+        let destination: URL? = {
             switch action {
             case .url(_, let urlStr, _): return URL(string: urlStr)
             case .openApp: return context.attributes.deepLink.flatMap(URL.init)
@@ -260,6 +265,12 @@ public struct PPGMatchLockScreenView: View {
                 return URL(string: "ppg-la://close?id=\(encoded)")
             }
         }()
+        let url = LiveActivityClickURL.make(
+            liveNotificationId: context.attributes.liveNotificationId,
+            type: index == 0 ? .clicked1 : .clicked2,
+            liveDataVersion: context.state.liveDataVersion,
+            destination: destination
+        )
         if let url {
             Link(destination: url) {
                 styledLabel(text: action.name, appearance: appearance, cornerRadius: design.borderRadius, isStretched: isStretched)

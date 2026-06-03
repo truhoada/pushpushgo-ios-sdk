@@ -33,7 +33,6 @@ internal class LiveActivityManager {
             LiveActivityLogger.shared.error("Live Activities are not enabled on this device")
             return nil
         }
-        
         do {
             let activity = try Activity.request(
                 attributes: attributes,
@@ -186,6 +185,44 @@ internal class LiveActivityManager {
         )
     }
     
+    /// Report a Live Activity tap (`clicked` / `clicked_1` / `clicked_2`) to
+    /// the statistics endpoint. Called from `LiveActivitiesSDK.handleURL(...)`
+    /// after a `ppg-la://click` URL is intercepted. The `subscriberId` is
+    /// looked up from `SubscriberIDStore` (the originating subscriber may be
+    /// gone after an app relaunch). No-op if the device never registered.
+    func reportClickEvent(
+        liveNotificationId: String,
+        type: PPGLiveNotificationStatisticsEventType,
+        liveDataVersion: Int
+    ) {
+        guard let subscriberId = SubscriberIDStore.shared.subscriberId(for: liveNotificationId) else {
+            LiveActivityLogger.shared.debug(
+                "Skipping \(type.rawValue) event — no subscriberId stored for \(liveNotificationId)"
+            )
+            return
+        }
+        let event = PPGLiveNotificationStatisticsEvent(type: type, liveDataVersion: liveDataVersion)
+        let repository = self.repository
+        let installationId = InstallationIDStore.shared.installationId
+        Task {
+            do {
+                try await repository.collectEvents(
+                    liveNotificationId: liveNotificationId,
+                    installationId: installationId,
+                    subscriberId: subscriberId,
+                    events: [event]
+                )
+                LiveActivityLogger.shared.info(
+                    "Reported \(type.rawValue) event for \(liveNotificationId) (v=\(liveDataVersion))"
+                )
+            } catch {
+                LiveActivityLogger.shared.error(
+                    "Failed to report \(type.rawValue) event: \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     func unsubscribe(liveNotificationId: String) {
         if let any = subscribers.removeValue(forKey: liveNotificationId) {
             // Subscriber's `cancel()` is type-erased through `Any` cast.

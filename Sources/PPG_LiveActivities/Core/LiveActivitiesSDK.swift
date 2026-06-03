@@ -233,7 +233,27 @@ public class LiveActivitiesSDK {
         closeHandler: ((String) -> Void)? = nil
     ) -> Bool {
         guard let scheme = url.scheme?.lowercased() else { return false }
-        
+
+        // `ppg-la://click?...` — a Live Activity tap. Record the statistics
+        // event, then forward to the real destination carried in `to` (a body
+        // tap with no deep link simply has no destination).
+        if let click = LiveActivityClickURL.parse(url) {
+            shared.manager?.reportClickEvent(
+                liveNotificationId: click.liveNotificationId,
+                type: click.type,
+                liveDataVersion: click.liveDataVersion
+            )
+            guard let destination = click.destination else { return true }
+            // http/https and `ppg-la://close` are handled here directly; a
+            // custom-scheme deep link is re-opened so the host app routes it
+            // (its own `onOpenURL` only ever saw the wrapper `ppg-la://click`).
+            if handleURL(destination, closeHandler: closeHandler) {
+                return true
+            }
+            UIApplication.shared.open(destination)
+            return true
+        }
+
         if scheme == "http" || scheme == "https" {
             UIApplication.shared.open(url)
             return true

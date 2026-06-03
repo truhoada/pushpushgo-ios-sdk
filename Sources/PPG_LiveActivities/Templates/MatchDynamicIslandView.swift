@@ -47,10 +47,12 @@ public struct PPGMatchDynamicIsland {
     // Widget URL
     
     private var widgetURL: URL? {
-        if let deepLink = context.attributes.deepLink {
-            return URL(string: deepLink)
-        }
-        return nil
+        LiveActivityClickURL.make(
+            liveNotificationId: context.attributes.liveNotificationId,
+            type: .clicked,
+            liveDataVersion: context.state.liveDataVersion,
+            destination: context.attributes.deepLink.flatMap(URL.init)
+        )
     }
     
     // Expanded View — Lock Screen-style layout (header + body)
@@ -104,8 +106,8 @@ public struct PPGMatchDynamicIsland {
             
             if !context.attributes.actionSet.isEmpty {
                 HStack(spacing: 8) {
-                    ForEach(context.attributes.actionSet.prefix(2), id: \.name) { action in
-                        actionButton(action)
+                    ForEach(Array(context.attributes.actionSet.prefix(2).enumerated()), id: \.offset) { index, action in
+                        actionButton(action, index: index)
                     }
                 }
             }
@@ -176,9 +178,9 @@ public struct PPGMatchDynamicIsland {
     }
     
     @ViewBuilder
-    private func actionButton(_ action: PPGLiveActivityAction) -> some View {
+    private func actionButton(_ action: PPGLiveActivityAction, index: Int) -> some View {
         let appearance = action.design.ios.appearance.lightMode
-        let url: URL? = {
+        let destination: URL? = {
             switch action {
             case .url(_, let urlStr, _): return URL(string: urlStr)
             case .openApp: return context.attributes.deepLink.flatMap(URL.init)
@@ -188,6 +190,12 @@ public struct PPGMatchDynamicIsland {
                 return URL(string: "ppg-la://close?id=\(encoded)")
             }
         }()
+        let url = LiveActivityClickURL.make(
+            liveNotificationId: context.attributes.liveNotificationId,
+            type: index == 0 ? .clicked1 : .clicked2,
+            liveDataVersion: context.state.liveDataVersion,
+            destination: destination
+        )
         if let url {
             Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius) }
         } else {

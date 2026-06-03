@@ -79,7 +79,13 @@ public struct MatchActivityAttributes: ActivityAttributes {
         /// Timestamp when the current `status` was last changed.
         /// Used to compute the live match minute client-side.
         public let statusChangedAt: Date?
-        
+
+        /// Backend live-data revision (wire: `liveDataVersion`). Reported with
+        /// every statistics event so the backend can correlate a tap/start/close
+        /// with the exact live-data snapshot the user saw. Defaults to `0` when
+        /// the backend payload omits it.
+        public let liveDataVersion: Int
+
         public init(
             homeTeamScore: Int,
             awayTeamScore: Int,
@@ -87,7 +93,8 @@ public struct MatchActivityAttributes: ActivityAttributes {
             hotMessage: PPGHotMessage? = nil,
             countdownDate: Date? = nil,
             countdownMessage: String? = nil,
-            statusChangedAt: Date? = nil
+            statusChangedAt: Date? = nil,
+            liveDataVersion: Int = 0
         ) {
             self.homeTeamScore = homeTeamScore
             self.awayTeamScore = awayTeamScore
@@ -96,6 +103,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             self.countdownDate = countdownDate
             self.countdownMessage = countdownMessage
             self.statusChangedAt = statusChangedAt
+            self.liveDataVersion = liveDataVersion
         }
         
         /// Prefix added in front of the live `Text(timerInterval:)` clock for
@@ -190,6 +198,16 @@ public struct MatchActivityAttributes: ActivityAttributes {
             countdownDate = Self.decodeDateField(from: c, key: .countdownDate)
             countdownMessage = try c.decodeIfPresent(String.self, forKey: .countdownMessage)
             statusChangedAt = Self.decodeDateField(from: c, key: .statusChangedAt)
+            // Tolerant: backend sends `liveDataVersion` as a number; ActivityKit's
+            // internal round-trip after `activity.update()` may re-encode it as a
+            // Double. Accept either, fall back to 0.
+            if let v = try? c.decodeIfPresent(Int.self, forKey: .liveDataVersion) {
+                liveDataVersion = v
+            } else if let d = try? c.decodeIfPresent(Double.self, forKey: .liveDataVersion) {
+                liveDataVersion = Int(d)
+            } else {
+                liveDataVersion = 0
+            }
         }
         
         /// Decode a Date that may arrive as an ISO-8601 string (backend APNs) or as a
@@ -216,12 +234,14 @@ public struct MatchActivityAttributes: ActivityAttributes {
             try c.encodeIfPresent(countdownDate, forKey: .countdownDate)
             try c.encodeIfPresent(countdownMessage, forKey: .countdownMessage)
             try c.encodeIfPresent(statusChangedAt, forKey: .statusChangedAt)
+            try c.encode(liveDataVersion, forKey: .liveDataVersion)
         }
-        
+
         private enum CodingKeys: String, CodingKey {
             case homeTeamScore, awayTeamScore, status, hotMessage
             case countdownDate, countdownMessage
             case statusChangedAt
+            case liveDataVersion
         }
     }
     
@@ -513,10 +533,17 @@ extension MatchActivityAttributes.ContentState: PPGHotMessageCarrying {
             status: status,
             hotMessage: nil,
             countdownDate: countdownDate,
-            countdownMessage: countdownMessage
+            countdownMessage: countdownMessage,
+            statusChangedAt: statusChangedAt,
+            liveDataVersion: liveDataVersion
         )
     }
 }
+
+// PPGLiveDataVersioned — lets the generic subscriber read the live-data
+// revision off this ContentState when reporting statistics events.
+@available(iOS 17.2, *)
+extension MatchActivityAttributes.ContentState: PPGLiveDataVersioned {}
 
 // PPGLiveActivityDesignCacheable
 

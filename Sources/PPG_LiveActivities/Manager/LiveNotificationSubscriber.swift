@@ -64,6 +64,10 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     private var pushToStartTask: Task<Void, Never>?
     private var activityWatchTask: Task<Void, Never>?
     private var trackedActivities: [String: ActivityTracker] = [:]
+
+    /// Latest `liveDataVersion` seen per tracked activity. Reported alongside
+    /// the `closed` statistics event (and used as the value at `started`).
+    private var lastLiveDataVersion: [String: Int] = [:]
     
     /// Last known remote-start token. Required to compose PUT /endpoint
     /// requests (backend expects both tokens together).
@@ -168,6 +172,10 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 updateToken: nil
             )
             self.subscriberId = id
+            // Persist so statistics click events reported from
+            // `LiveActivitiesSDK.handleURL(...)` can find the subscriberId even
+            // after an app relaunch (when this subscriber is gone).
+            SubscriberIDStore.shared.set(id, for: liveNotificationId)
             LiveActivityLogger.shared.info(
                 "Subscriber registered for liveNotification \(liveNotificationId) (subscriberId=\(id))"
             )
@@ -253,6 +261,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 onActivityAppeared?(activity.id, liveNotificationId)
                 statusHandler(.activityStarted(activityId: activity.id))
                 trackActivity(activity)
+                reportEvent(.started, liveDataVersion: liveDataVersion(of: state))
             }
         } catch {
             LiveActivityLogger.shared.error(
@@ -283,6 +292,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 self.onActivityAppeared?(activityId, self.liveNotificationId)
                 self.statusHandler(.activityStarted(activityId: activityId))
                 self.trackActivity(activity)
+                self.reportEvent(.started, liveDataVersion: self.liveDataVersion(of: activity.content.state))
             }
         }
     }
@@ -290,7 +300,8 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     private func trackActivity(_ activity: Activity<T>) {
         let activityId = activity.id
         trackedActivities[activityId]?.cancel()
-        
+        lastLiveDataVersion[activityId] = liveDataVersion(of: activity.content.state)
+
         let tracker = ActivityTracker(
             activity: activity,
             onTokenUpdate: { [weak self] tokenHex in
@@ -300,16 +311,60 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             },
             onEnd: { [weak self] in
                 guard let self else { return }
+                self.reportEvent(.closed, liveDataVersion: self.lastLiveDataVersion[activityId] ?? 0)
                 self.onActivityCleared?(activityId)
                 self.statusHandler(.activityEnded(activityId: activityId))
                 self.trackedActivities.removeValue(forKey: activityId)
+                self.lastLiveDataVersion.removeValue(forKey: activityId)
             },
             onContentUpdate: { [weak self] state in
-                self?.onContentStateUpdated?(activityId, state)
+                guard let self else { return }
+                self.lastLiveDataVersion[activityId] = self.liveDataVersion(of: state)
+                self.onContentStateUpdated?(activityId, state)
             }
         )
         trackedActivities[activityId] = tracker
         tracker.start()
+    }
+
+    // Statistics events
+
+    /// Read the backend `liveDataVersion` off a content state, if the template
+    /// exposes it. Returns `0` for templates that don't carry a version.
+    private func liveDataVersion(of state: T.ContentState) -> Int {
+        (state as? PPGLiveDataVersioned)?.liveDataVersion ?? 0
+    }
+
+    /// Fire-and-forget POST of a single statistics event. No-op until the
+    /// subscriber is registered (we need a `subscriberId`).
+    private func reportEvent(_ type: PPGLiveNotificationStatisticsEventType, liveDataVersion: Int) {
+        guard let subscriberId else {
+            LiveActivityLogger.shared.debug(
+                "Skipping \(type.rawValue) event — no subscriberId yet"
+            )
+            return
+        }
+        let event = PPGLiveNotificationStatisticsEvent(type: type, liveDataVersion: liveDataVersion)
+        let repository = self.repository
+        let liveNotificationId = self.liveNotificationId
+        let installationId = self.installationId
+        Task {
+            do {
+                try await repository.collectEvents(
+                    liveNotificationId: liveNotificationId,
+                    installationId: installationId,
+                    subscriberId: subscriberId,
+                    events: [event]
+                )
+                LiveActivityLogger.shared.info(
+                    "Reported \(type.rawValue) event for \(liveNotificationId) (v=\(liveDataVersion))"
+                )
+            } catch {
+                LiveActivityLogger.shared.error(
+                    "Failed to report \(type.rawValue) event: \(error.localizedDescription)"
+                )
+            }
+        }
     }
     
     /// Replay any update tokens that were captured before
