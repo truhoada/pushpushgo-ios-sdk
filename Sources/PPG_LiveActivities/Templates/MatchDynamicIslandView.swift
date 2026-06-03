@@ -24,18 +24,15 @@ public struct PPGMatchDynamicIsland {
     /// Build the DynamicIsland configuration
     public func body() -> DynamicIsland {
         DynamicIsland {
-            // Expanded view
-            DynamicIslandExpandedRegion(.leading) {
-                expandedLeading
-            }
-            DynamicIslandExpandedRegion(.trailing) {
-                expandedTrailing
-            }
+            // Expanded view — Lock Screen-style layout split across two regions
+            // so the title/clock occupies the otherwise-empty space beside the
+            // camera (center) and the teams + score + buttons fill the large
+            // bottom region without clipping.
             DynamicIslandExpandedRegion(.center) {
-                expandedCenter
+                expandedHeader
             }
             DynamicIslandExpandedRegion(.bottom) {
-                expandedBottom
+                expandedBody
             }
         } compactLeading: {
             compactLeading
@@ -56,64 +53,149 @@ public struct PPGMatchDynamicIsland {
         return nil
     }
     
-    // Expanded Views
+    // Expanded View — Lock Screen-style layout (header + body)
     
-    private var expandedLeading: some View {
-        HStack(spacing: 6) {
-            teamBadge(imageType: .homeTeamBadge, size: 28)
-            
-            VStack(alignment: .leading, spacing: 1) {
-                Text(context.attributes.homeTeamName)
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                
-                Text("\(context.state.homeTeamScore)")
-                    .font(.title2)
+    /// Top region: hot message when present (transient, auto-hides), otherwise
+    /// the title + optional live match clock. Rendered in the `.center` region
+    /// so it sits beside the camera and reclaims the empty top space.
+    @ViewBuilder
+    private var expandedHeader: some View {
+        if let hotMessage = context.state.hotMessage {
+            PPGHotMessageView(
+                hotMessage: hotMessage,
+                activityID: context.activityID,
+                compact: true
+            )
+        } else {
+            HStack(spacing: 0) {
+                if context.state.showsMatchClock {
+                    Color.clear.frame(width: 56)
+                }
+                Text(context.attributes.title)
+                    .font(.caption)
                     .fontWeight(.bold)
-                    .monospacedDigit()
-            }
-        }
-    }
-    
-    private var expandedTrailing: some View {
-        HStack(spacing: 6) {
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(context.attributes.awayTeamName)
-                    .font(.caption2)
-                    .fontWeight(.medium)
+                    .foregroundColor(.white.opacity(0.9))
                     .lineLimit(1)
-                
-                Text("\(context.state.awayTeamScore)")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .monospacedDigit()
-            }
-            
-            teamBadge(imageType: .awayTeamBadge, size: 28)
-        }
-    }
-    
-    private var expandedCenter: some View {
-        VStack(spacing: 2) {
-            let countdownDate = context.state.countdownDate ?? context.attributes.countdownDate
-            if phase == .preMatch, let countdownDate {
-                diCountdownTimer(until: countdownDate)
-            } else {
-                HStack(spacing: 4) {
-                    if phase.isPlaying {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 5, height: 5)
-                    }
-                    Text(context.attributes.label(for: phase))
-                        .font(.caption2)
-                        .fontWeight(.medium)
-                        .foregroundColor(phase.color)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                if context.state.showsMatchClock,
+                   let clockStart = context.state.matchClockStartDate {
+                    clockText(clockStart: clockStart)
+                        .monospacedDigit()
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .frame(width: 56, alignment: .trailing)
                 }
             }
         }
     }
+    
+    /// Bottom region: teams + central score/status, then up to two action
+    /// buttons below — mirrors the Lock Screen body.
+    @ViewBuilder
+    private var expandedBody: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 0) {
+                teamView(name: context.attributes.homeTeamName, imageType: .homeTeamBadge)
+                centerView
+                teamView(name: context.attributes.awayTeamName, imageType: .awayTeamBadge)
+            }
+            
+            if !context.attributes.actionSet.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(context.attributes.actionSet.prefix(2), id: \.name) { action in
+                        actionButton(action)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func teamView(name: String, imageType: PPGLiveActivityImageType) -> some View {
+        VStack(spacing: 3) {
+            teamBadge(imageType: imageType, size: 38)
+            Text(name)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundColor(.white.opacity(0.8))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(minWidth: 56, maxWidth: .infinity)
+    }
+    
+    private var centerView: some View {
+        VStack(spacing: 2) {
+            let countdownDate = context.state.countdownDate ?? context.attributes.countdownDate
+            if phase == .preMatch, let countdownDate {
+                diCountdownTimerLarge(until: countdownDate)
+            } else {
+                Text(context.state.scoreDisplay)
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .monospacedDigit()
+            }
+            
+            HStack(spacing: 4) {
+                if phase.isPlaying {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 5, height: 5)
+                }
+                Text(statusLabel)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundColor(statusColor)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    /// Status color for the Dynamic Island: gray for in-match breaks
+    /// (half time / extra-time breaks), green for every other phase.
+    private var statusColor: Color {
+        phase.isBreak ? .gray : .green
+    }
+    
+    private var statusLabel: String {
+        let msg = context.state.countdownMessage ?? context.attributes.countdownMessage
+        if phase == .preMatch, let msg { return msg }
+        return context.attributes.label(for: phase)
+    }
+    
+    private func clockText(clockStart: Date) -> Text {
+        let timer = Text(timerInterval: clockStart...clockStart.addingTimeInterval(500 * 60),
+                         countsDown: false,
+                         showsHours: false) + Text("'")
+        if let prefix = context.state.matchMinutePrefix {
+            return Text(prefix) + timer
+        }
+        return timer
+    }
+    
+    @ViewBuilder
+    private func actionButton(_ action: PPGLiveActivityAction) -> some View {
+        let appearance = action.design.ios.appearance.lightMode
+        let url: URL? = {
+            switch action {
+            case .url(_, let urlStr, _): return URL(string: urlStr)
+            case .openApp: return context.attributes.deepLink.flatMap(URL.init)
+            case .close:
+                let encoded = context.attributes.liveNotificationId
+                    .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                return URL(string: "ppg-la://close?id=\(encoded)")
+            }
+        }()
+        if let url {
+            Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius) }
+        } else {
+            ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius)
+        }
+    }
+    
+    // Countdown timer used by compact leading (small) and expanded center (large)
     
     @ViewBuilder
     private func diCountdownTimer(until date: Date) -> some View {
@@ -134,33 +216,18 @@ public struct PPGMatchDynamicIsland {
     }
     
     @ViewBuilder
-    private var expandedBottom: some View {
-        if let hotMessage = context.state.hotMessage {
-            PPGHotMessageView(
-                hotMessage: hotMessage,
-                activityID: context.activityID
-            )
-        } else if !context.attributes.actionSet.isEmpty {
-            HStack(spacing: 8) {
-                ForEach(context.attributes.actionSet.prefix(2), id: \.name) { action in
-                    let appearance = action.design.ios.appearance.lightMode
-                    let url: URL? = {
-                        switch action {
-                        case .url(_, let urlStr, _): return URL(string: urlStr)
-                        case .openApp: return context.attributes.deepLink.flatMap(URL.init)
-                        case .close:
-                            let encoded = context.attributes.liveNotificationId
-                                .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                            return URL(string: "ppg-la://close?id=\(encoded)")
-                        }
-                    }()
-                    if let url {
-                        Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius) }
-                    } else {
-                        ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius)
-                    }
-                }
-            }
+    private func diCountdownTimerLarge(until date: Date) -> some View {
+        if date > Date.now {
+            Text(timerInterval: Date.now...date, countsDown: true)
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .multilineTextAlignment(.center)
+                .foregroundColor(.white)
+        } else {
+            Text("0:00")
+                .font(.system(size: 28, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(.white)
         }
     }
     
@@ -206,7 +273,7 @@ public struct PPGMatchDynamicIsland {
         HStack(spacing: 3) {
             if phase.isPlaying {
                 Circle()
-                    .fill(Color.green)
+                    .fill(statusColor)
                     .frame(width: 5, height: 5)
             }
             if context.state.showsMatchClock, let clockStart = context.state.matchClockStartDate {
@@ -218,14 +285,14 @@ public struct PPGMatchDynamicIsland {
                     .monospacedDigit()
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundColor(phase.color)
+                    .foregroundColor(statusColor)
                     .lineLimit(1)
                     .fixedSize()
             } else {
                 Text(phase.shortText)
                     .font(.caption2)
                     .fontWeight(.semibold)
-                    .foregroundColor(phase.color)
+                    .foregroundColor(statusColor)
             }
         }
     }

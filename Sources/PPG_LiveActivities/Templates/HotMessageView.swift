@@ -25,10 +25,16 @@ public struct PPGHotMessageView: View {
     
     private let hotMessage: PPGHotMessage
     private let activityID: String
+    private let compact: Bool
     
-    public init(hotMessage: PPGHotMessage, activityID: String) {
+    /// - Parameter compact: when `true`, renders a single-line, low-padding
+    ///   variant with no rounded banner background. Used by the Dynamic Island
+    ///   expanded view where vertical space is tight and a tall banner would
+    ///   push the action buttons out of the clipped region.
+    public init(hotMessage: PPGHotMessage, activityID: String, compact: Bool = false) {
         self.hotMessage = hotMessage
         self.activityID = activityID
+        self.compact = compact
     }
     
     public var body: some View {
@@ -43,7 +49,11 @@ public struct PPGHotMessageView: View {
         
         TimelineView(.explicit([Date(), endDate])) { timeline in
             if timeline.date < endDate {
-                messageBanner
+                if compact {
+                    compactBanner
+                } else {
+                    messageBanner
+                }
             }
         }
     }
@@ -65,5 +75,16 @@ public struct PPGHotMessageView: View {
             UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 20, bottomTrailingRadius: 20, topTrailingRadius: 0, style: .continuous)
                 .fill(Color.black.opacity(0.45))
         )
+    }
+    
+    private var compactBanner: some View {
+        Text(hotMessage.text)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
     }
 }

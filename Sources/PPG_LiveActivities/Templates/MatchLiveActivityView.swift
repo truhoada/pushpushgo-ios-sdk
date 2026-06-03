@@ -173,13 +173,13 @@ public struct PPGMatchLockScreenView: View {
             HStack(spacing: 4) {
                 if phase.isPlaying {
                     Circle()
-                        .fill(Color.green)
+                        .fill(Color.primary)
                         .frame(width: 6, height: 6)
                 }
                 Text(statusLabel)
                     .font(.caption)
                     .fontWeight(.medium)
-                    .foregroundColor(phase.color)
+                    .foregroundColor(.primary)
             }
         }
         .frame(maxWidth: .infinity)

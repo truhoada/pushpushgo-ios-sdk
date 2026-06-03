@@ -120,18 +120,17 @@ let activityId = LiveActivitiesSDK.shared.startActivity(
 
 ### Step 5: Update During the Match
 
-`matchMinute` is optional — leave it `nil` before kickoff or at full-time and
-the widget will hide the live-minute badge.
+Field names mirror the backend APNs `content-state` payload
+(`homeTeamScore`, `awayTeamScore`, `status`).
 
 ```swift
 LiveActivitiesSDK.shared.updateActivity(
     MatchActivityAttributes.self,
     activityId: activityId!,
     state: MatchActivityAttributes.ContentState(
-        homeScore: 1,
-        awayScore: 0,
-        phase: .firstHalf,
-        matchMinute: "23"
+        homeTeamScore: 1,
+        awayTeamScore: 0,
+        status: .firstHalf
     )
 )
 ```
@@ -143,10 +142,9 @@ LiveActivitiesSDK.shared.endActivity(
     MatchActivityAttributes.self,
     activityId: activityId!,
     finalState: MatchActivityAttributes.ContentState(
-        homeScore: 2,
-        awayScore: 1,
-        phase: .matchEnded,
-        matchMinute: nil
+        homeTeamScore: 2,
+        awayTeamScore: 1,
+        status: .matchEnded
     ),
     dismissPolicy: .default  // Stays on Lock Screen for ~4 hours
 )
@@ -155,24 +153,29 @@ LiveActivitiesSDK.shared.endActivity(
 ## Hot Messages
 
 `ContentState.hotMessage` renders a transient banner in the Lock Screen and
-Dynamic Island (taking priority over the CTA). It auto-hides after
-`durationSeconds` using a deterministic timeline, and per-activity timestamps
-are persisted in the App Group so the countdown survives widget refreshes.
-Set `hotMessage` back to `nil` in a follow-up `update` to clear it early.
+Dynamic Island (taking priority over the CTA). Visibility is the **minimum**
+of two cutoffs:
+
+- **Local cap** — `PPGHotMessage.maxDisplayDuration` (10 s by default).
+- **Backend cutoff** — `expiresAt` (Unix epoch wire field `timestamp`).
+
+The SDK schedules a deterministic `Activity.update` at the computed end
+instant so the banner disappears even if the widget's `TimelineView`
+updates are deferred under render-budget pressure. Send the same content
+state with `hotMessage: nil` to clear it early.
 
 ```swift
 LiveActivitiesSDK.shared.updateActivity(
     MatchActivityAttributes.self,
     activityId: activityId!,
     state: MatchActivityAttributes.ContentState(
-        homeScore: 1,
-        awayScore: 0,
-        phase: .firstHalf,
-        matchMinute: "45+2",
+        homeTeamScore: 1,
+        awayTeamScore: 0,
+        status: .firstHalf,
         hotMessage: PPGHotMessage(
             id: "var-cancelled-1",
             text: "Goal cancelled after VAR",
-            durationSeconds: 5
+            expiresAt: Date(timeIntervalSinceNow: 30) // hard cutoff
         )
     )
 )
@@ -244,61 +247,68 @@ The SDK provides a complete `MatchPhase` enum with all football match states:
 | `MATCH_ENDED` | Match Ended | Finished |
 | `OTHER` | — | Fallback / unknown |
 
-## Observer API (Recommended for Production)
+## Subscriber API (Recommended for Production)
 
-The primary production flow uses `observeLiveActivity` — the PPG backend controls the entire lifecycle remotely via ActivityKit push notifications.
+Production Live Activities are driven entirely by PPG backend push.
+`subscribe(liveNotificationId:)` registers this device for a specific
+Live Notification. Backend handles `event:start`, `event:update`, and
+`event:end` via APNs.
 
 ### How it works
 
-1. Create a campaign in the PPG panel or via PPG API
-2. User taps "Follow this match" in your app → SDK registers as observer
-3. PPG backend starts, updates, and ends the Live Activity via push
-4. On **iOS 18+**: broadcast channel (1 push → all observers)
-5. On **iOS 17.2–17.x**: per-device push tokens
+1. Backend creates a Live Notification (`POST /core/projects/{project}/live-notifications/football-match-tracking`) and returns its `id`.
+2. App calls `LiveActivitiesSDK.shared.subscribe(MatchActivityAttributes.self, liveNotificationId: id)`.
+3. SDK generates / reuses a persistent `installationId` (UUIDv4 in `UserDefaults`) and listens on `Activity<T>.pushToStartTokenUpdates`.
+4. On every new push-to-start token, SDK POSTs `/live-notifications/{id}/subscribers` with `{ installationId, endpoint:{ transport: "APNS", remoteStartToken } }`.
+5. Backend pushes `event:start` → OS creates the Live Activity locally with the right `attributes` + initial `content-state`.
+6. SDK forwards every rotated `activity.pushTokenUpdates` token via PUT `/subscribers/{installationId}/endpoint` so subsequent `event:update` pushes can target this device.
+7. `event:end` (no content-state) ends the activity. `unsubscribe(liveNotificationId:)` deletes the subscriber on the backend.
 
 ### Usage
 
 ```swift
 // User taps "Follow match" button
-LiveActivitiesSDK.shared.observeLiveActivity(
+LiveActivitiesSDK.shared.subscribe(
     MatchActivityAttributes.self,
-    campaignId: "camp-2026-final",
-    templateId: "match"
+    liveNotificationId: "69f84d8daddcd1d291038d91"
 ) { status in
     switch status {
     case .registered:
-        print("Waiting for match to start...")
-    case .started(let activityId):
-        print("Live Activity started: \(activityId)")
-    case .updated(let activityId):
-        print("Activity updated: \(activityId)")
-    case .ended(let activityId):
-        print("Match ended: \(activityId)")
+        print("Subscriber registered, waiting for match start…")
+    case .activityStarted(let id):
+        print("Live Activity started: \(id)")
+    case .updateTokenSent(let id):
+        print("Update token forwarded for \(id)")
+    case .activityEnded(let id):
+        print("Activity ended: \(id)")
+    case .unsubscribed:
+        print("Subscriber removed")
     case .error(let error):
-        print("Error: \(error)")
+        print("Subscriber error: \(error)")
     }
 }
 
-// To stop observing
-LiveActivitiesSDK.shared.stopObserving(campaignId: "camp-2026-final")
+// To stop receiving updates
+LiveActivitiesSDK.shared.unsubscribe(liveNotificationId: "69f84d8daddcd1d291038d91")
 ```
 
-### Observer vs Local Start
+### Subscriber vs Local Start
 
-| Feature | `observeLiveActivity` | `startActivity` |
+| Feature | `subscribe(liveNotificationId:)` | `startActivity` |
 |---|---|---|
 | Who starts? | PPG backend (via push) | App code (locally) |
 | App must be open? | No (after registration) | Yes |
-| Best for | Production campaigns | Development/testing |
-| Scales to many users | Yes (channels on iOS 18+) | N/A (local only) |
+| Best for | Production | Development / testing |
+| REST endpoints | `/live-notifications/{id}/subscribers` | none |
 
 ## Push Token Management
 
-The SDK automatically handles ActivityKit push tokens:
+The SDK automatically handles ActivityKit push tokens for subscribed
+notifications:
 
-- **Push-to-start tokens**: Sent to PPG backend when `observeLiveActivity` is called
-- **Push-to-update tokens**: Registered automatically after an activity starts
-- **Token rotation**: Observed and re-registered on change
+- **Push-to-start token**: posted to `/subscribers` on first observation and on every rotation.
+- **Activity update token**: forwarded to `/subscribers/{installationId}/endpoint` once the activity exists.
+- **`installationId`**: stable UUIDv4 generated and persisted by the SDK — not the same as `PPG.subscriberId` from the push SDK.
 
 ## Dismiss Policies
 
@@ -354,9 +364,9 @@ initialize(
 // Check availability
 areActivitiesEnabled() -> Bool
 
-// Observer API (production — backend-driven)
-observeLiveActivity<T>(_ type: T.Type, campaignId: String, templateId: String, onStatus:)
-stopObserving(campaignId: String)
+// Subscriber API (production — backend-driven)
+subscribe<T>(_ type: T.Type, liveNotificationId: String, onStatus:)
+unsubscribe(liveNotificationId: String)
 
 // Local lifecycle (development/testing or custom flows)
 startActivity<T>(attributes: T, initialState: T.ContentState, templateId: String) -> String?
