@@ -103,7 +103,7 @@ internal class LiveActivityRepository {
 
     // Statistics events
 
-    /// `POST /v1/ios/projects/{project}/live-notifications/{id}/events`
+    /// `POST /core/v1/ios/projects/{project}/live-notifications/{id}/events`
     /// Reports Live Activity statistics events (started / closed / clicked…).
     /// Note this is a different API surface than the `/core/...` subscriber
     /// endpoints above, hence its own request builder.
@@ -118,7 +118,7 @@ internal class LiveActivityRepository {
             subscriberId: subscriberId,
             events: events
         )
-        guard let url = URL(string: "\(baseURL)/v1/ios/projects/\(projectId)/live-notifications/\(liveNotificationId)/events") else {
+        guard let url = URL(string: "\(baseURL)/statistics/v1/ios/projects/\(projectId)/live-notifications/\(liveNotificationId)/events") else {
             throw LiveActivityError.invalidURL
         }
         var request = URLRequest(url: url)

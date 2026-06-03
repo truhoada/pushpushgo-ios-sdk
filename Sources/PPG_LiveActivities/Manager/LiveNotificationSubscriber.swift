@@ -28,6 +28,14 @@ internal protocol LiveNotificationSubscriberCancellable: AnyObject {
     func cancel()
 }
 
+/// Minimal envelope for decoding just `lifecycle.status` from a campaign
+/// payload, used to gate bootstrap-start on the campaign being ONGOING.
+@available(iOS 17.2, *)
+private struct LifecycleStatusEnvelope: Decodable {
+    struct Lifecycle: Decodable { let status: PPGLiveActivityLifecycleStatus }
+    let lifecycle: Lifecycle
+}
+
 @available(iOS 17.2, *)
 internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificationSubscriberCancellable {
     
@@ -68,6 +76,10 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     /// Latest `liveDataVersion` seen per tracked activity. Reported alongside
     /// the `closed` statistics event (and used as the value at `started`).
     private var lastLiveDataVersion: [String: Int] = [:]
+
+    /// `(activityId, eventType)` keys already reported, so a single
+    /// start/close is never POSTed twice (bootstrap + watcher can race).
+    private var reportedEventKeys: Set<String> = []
     
     /// Last known remote-start token. Required to compose PUT /endpoint
     /// requests (backend expects both tokens together).
@@ -225,6 +237,19 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         guard let onCampaignAlreadyActive else { return }
         do {
             let data = try await repository.fetchCampaign(liveNotificationId: liveNotificationId)
+
+            // Only bootstrap-start when the campaign is actually ONGOING.
+            // For PENDING / scheduled campaigns the OS will start the activity
+            // via push-to-start at `scheduledAt` — starting it here too would
+            // produce a duplicate Live Activity (one at subscribe time, one at
+            // the scheduled time).
+            if let status = Self.decodeLifecycleStatus(from: data), status != .ongoing {
+                LiveActivityLogger.shared.debug(
+                    "Bootstrap: campaign \(liveNotificationId) is \(status.rawValue), not ONGOING — leaving start to push-to-start"
+                )
+                return
+            }
+
             guard let (attrs, state) = try await onCampaignAlreadyActive(data) else {
                 LiveActivityLogger.shared.debug(
                     "Bootstrap: campaign \(liveNotificationId) not yet active"
@@ -261,7 +286,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 onActivityAppeared?(activity.id, liveNotificationId)
                 statusHandler(.activityStarted(activityId: activity.id))
                 trackActivity(activity)
-                reportEvent(.started, liveDataVersion: liveDataVersion(of: state))
+                reportEvent(.started, liveDataVersion: liveDataVersion(of: state), activityId: activity.id)
             }
         } catch {
             LiveActivityLogger.shared.error(
@@ -292,7 +317,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 self.onActivityAppeared?(activityId, self.liveNotificationId)
                 self.statusHandler(.activityStarted(activityId: activityId))
                 self.trackActivity(activity)
-                self.reportEvent(.started, liveDataVersion: self.liveDataVersion(of: activity.content.state))
+                self.reportEvent(.started, liveDataVersion: self.liveDataVersion(of: activity.content.state), activityId: activityId)
             }
         }
     }
@@ -311,7 +336,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             },
             onEnd: { [weak self] in
                 guard let self else { return }
-                self.reportEvent(.closed, liveDataVersion: self.lastLiveDataVersion[activityId] ?? 0)
+                self.reportEvent(.closed, liveDataVersion: self.lastLiveDataVersion[activityId] ?? 0, activityId: activityId)
                 self.onActivityCleared?(activityId)
                 self.statusHandler(.activityEnded(activityId: activityId))
                 self.trackedActivities.removeValue(forKey: activityId)
@@ -336,11 +361,25 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     }
 
     /// Fire-and-forget POST of a single statistics event. No-op until the
-    /// subscriber is registered (we need a `subscriberId`).
-    private func reportEvent(_ type: PPGLiveNotificationStatisticsEventType, liveDataVersion: Int) {
+    /// subscriber is registered (we need a `subscriberId`). De-duplicated per
+    /// `(activityId, type)` — bootstrap-start and the `activityUpdates` watcher
+    /// can both observe the same new activity, so without this guard a single
+    /// start would be reported twice.
+    private func reportEvent(
+        _ type: PPGLiveNotificationStatisticsEventType,
+        liveDataVersion: Int,
+        activityId: String
+    ) {
         guard let subscriberId else {
             LiveActivityLogger.shared.debug(
                 "Skipping \(type.rawValue) event — no subscriberId yet"
+            )
+            return
+        }
+        let dedupeKey = "\(activityId):\(type.rawValue)"
+        guard reportedEventKeys.insert(dedupeKey).inserted else {
+            LiveActivityLogger.shared.debug(
+                "Skipping duplicate \(type.rawValue) event for \(activityId)"
             )
             return
         }
@@ -421,7 +460,15 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     }
     
     // Helpers
-    
+
+    /// Decode just `lifecycle.status` from the raw campaign payload so we can
+    /// gate bootstrap-start without depending on the template-specific
+    /// `onCampaignAlreadyActive` parsing. Returns `nil` if the field is absent
+    /// or unparseable (in which case the caller falls back to the closure).
+    private static func decodeLifecycleStatus(from data: Data) -> PPGLiveActivityLifecycleStatus? {
+        return try? JSONDecoder().decode(LifecycleStatusEnvelope.self, from: data).lifecycle.status
+    }
+
     private static func hexString(_ data: Data) -> String {
         data.map { String(format: "%02x", $0) }.joined()
     }
