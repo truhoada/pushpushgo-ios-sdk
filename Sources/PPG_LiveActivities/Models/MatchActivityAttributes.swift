@@ -319,7 +319,7 @@ public struct MatchActivityAttributes: ActivityAttributes {
             
             self.content = try c.decode(PPGFootballMatchContent.self, forKey: .content)
             self.design = try c.decode(PPGFootballMatchDesign.self, forKey: .design)
-            self.statusLabels = try c.decodeIfPresent([String: String].self, forKey: .statusLabels) ?? [:]
+            self.statusLabels = Self.decodeStatusLabels(from: c)
             
             // actionSet — accept `actionSet` or `actions`. Each element
             // requires a `type` discriminator (URL/OPEN_APP/CLOSE). If the
@@ -357,7 +357,12 @@ public struct MatchActivityAttributes: ActivityAttributes {
         try c.encode(template, forKey: .template)
         try c.encode(content, forKey: .content)
         try c.encode(design, forKey: .design)
-        try c.encode(statusLabels, forKey: .statusLabels)
+        // Wire format is an ordered array (one label per MatchPhase, in
+        // `MatchPhase.allCases` order) — the compacted shape backend sends in
+        // the APNs `attributes`. Encode in the same order so the ActivityKit
+        // round-trip (encode → store → decode) stays consistent.
+        let orderedLabels = MatchPhase.allCases.map { statusLabels[$0.rawValue] ?? "" }
+        try c.encode(orderedLabels, forKey: .statusLabels)
         try c.encode(actionSet, forKey: .actionSet)
         try c.encode(timeout, forKey: .timeout)
         try c.encodeIfPresent(url, forKey: .url)
@@ -371,6 +376,24 @@ public struct MatchActivityAttributes: ActivityAttributes {
     /// failing the whole attributes decode. This trades CTA buttons for
     /// activity visibility — preferable while the backend payload is being
     /// fixed.
+    /// Decode `statusLabels` from the compacted APNs wire shape: an ordered
+    /// `[String]` where index `i` is the label for `MatchPhase.allCases[i]`.
+    /// Empty strings are skipped so `label(for:)` keeps its `displayText`
+    /// fallback. Returns `[:]` if the field is absent or not an array.
+    private static func decodeStatusLabels(
+        from container: KeyedDecodingContainer<CodingKeys>
+    ) -> [String: String] {
+        guard let labels = try? container.decodeIfPresent([String].self, forKey: .statusLabels) else {
+            return [:]
+        }
+        let phases = MatchPhase.allCases
+        var result: [String: String] = [:]
+        for (index, label) in labels.enumerated() where index < phases.count && !label.isEmpty {
+            result[phases[index].rawValue] = label
+        }
+        return result
+    }
+
     private static func decodeActionSet(
         from container: KeyedDecodingContainer<CodingKeys>
     ) -> [PPGLiveActivityAction] {

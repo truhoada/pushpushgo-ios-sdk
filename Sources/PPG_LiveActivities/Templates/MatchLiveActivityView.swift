@@ -23,10 +23,10 @@ public struct PPGMatchLockScreenView: View {
     
     private var phase: MatchPhase { context.state.status }
     
-    /// Background for the current match phase — uses backend-provided
-    /// `statusBackgrounds` when available, falls back to the design cache
+    /// Background for the current match phase — uses the backend-provided
+    /// `statusBackground` when available, falls back to the design cache
     /// (populated from the REST bootstrap GET). When neither is set
-    /// (backend sent `statusBackgrounds:null` — "device system" mode),
+    /// (backend sent `statusBackground:null` — "device system" mode),
     /// renders `Color.clear` so iOS shows its system-adaptive Live Activity
     /// background which auto-adjusts to light/dark mode.
     @ViewBuilder

@@ -331,7 +331,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
                     progressBarColor: PPGBasicColorSet("#000"),
                     breakTimeBarColor: nil
                 ),
-                ios: PPGFootballMatchIOSDesign(statusBackgrounds: nil)
+                ios: PPGFootballMatchIOSDesign(statusBackground: nil)
             ),
             statusLabels: statusLabels,
             actions: actions,
@@ -627,9 +627,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
                     progressBarColor: PPGBasicColorSet("#000"),
                     breakTimeBarColor: nil
                 ),
-                ios: PPGFootballMatchIOSDesign(statusBackgrounds: [
-                    "PRE_MATCH": PPGColorSet(.basic(hex: "#FFF"))
-                ])
+                ios: PPGFootballMatchIOSDesign(statusBackground: PPGColorSet(.basic(hex: "#FFF")))
             ),
             statusLabels: ["PRE_MATCH": "Przed meczem"],
             actions: [
@@ -806,7 +804,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
                     progressBarColor: PPGBasicColorSet("#000"),
                     breakTimeBarColor: nil
                 ),
-                ios: PPGFootballMatchIOSDesign(statusBackgrounds: nil)
+                ios: PPGFootballMatchIOSDesign(statusBackground: nil)
             ),
             statusLabels: [:],
             actions: [],
@@ -863,10 +861,7 @@ final class PPG_LiveActivitiesTests: XCTestCase {
             awayTeamName: "Dortmund",
             awayTeamImage: "https://example.com/a.png"
         )
-        let ios = PPGFootballMatchIOSDesign(statusBackgrounds: [
-            "PRE_MATCH": PPGColorSet(.basic(hex: "#111")),
-            "OTHER":     PPGColorSet(.basic(hex: "#333"))
-        ])
+        let ios = PPGFootballMatchIOSDesign(statusBackground: PPGColorSet(.basic(hex: "#111")))
         let android = PPGFootballMatchAndroidDesign(
             hasTrackerIcon: true,
             progressBarColor: PPGBasicColorSet("#000"),

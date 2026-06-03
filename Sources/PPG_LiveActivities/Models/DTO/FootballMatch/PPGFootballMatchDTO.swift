@@ -65,19 +65,21 @@ public struct PPGFootballMatchContent: Codable, Sendable, Hashable {
 /// iOS-specific design for the football match template.
 @available(iOS 17.2, *)
 public struct PPGFootballMatchIOSDesign: Codable, Sendable, Hashable {
-    /// Background color (or gradient) rendered for each match status.
-    /// Keys are raw `MatchPhase` values (e.g. `"PRE_MATCH"`).
-    /// `nil` means the SDK should use its default background.
-    public let statusBackgrounds: [String: PPGColorSet]?
-    
-    public init(statusBackgrounds: [String: PPGColorSet]?) {
-        self.statusBackgrounds = statusBackgrounds
+    /// Single background color (or gradient) applied to the Live Activity
+    /// regardless of match status. `nil` means "device system" mode — the SDK
+    /// renders the iOS system-adaptive background. Backend compacted the old
+    /// per-status `statusBackgrounds` map into this one field to shrink the
+    /// APNs `attributes` payload (4 KB limit).
+    public let statusBackground: PPGColorSet?
+
+    public init(statusBackground: PPGColorSet?) {
+        self.statusBackground = statusBackground
     }
-    
-    /// Resolved background for a given match status, with `.other` fallback.
+
+    /// Resolved background. The same color is used for every phase now, so
+    /// `status` is ignored — kept in the signature for call-site stability.
     public func background(for status: MatchPhase) -> PPGColorSet? {
-        guard let map = statusBackgrounds else { return nil }
-        return map[status.rawValue] ?? map[MatchPhase.other.rawValue]
+        statusBackground
     }
 }
 
