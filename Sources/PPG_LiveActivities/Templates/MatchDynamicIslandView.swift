@@ -289,17 +289,25 @@ public struct PPGMatchDynamicIsland {
                                  countsDown: false,
                                  showsHours: false) + Text("'")
                 let combined: Text = context.state.matchMinutePrefix.map { Text($0) + timer } ?? timer
+                // `Text(timerInterval:)` reserves layout width for the widest
+                // possible value of the interval ("499:59'"), which overflows
+                // the narrow compact-trailing slot and gets clipped away by
+                // the system. Pin it to a fixed frame and let the glyphs
+                // scale down instead.
                 combined
                     .monospacedDigit()
                     .font(.caption2)
                     .fontWeight(.semibold)
                     .foregroundColor(statusColor)
                     .lineLimit(1)
-                    .fixedSize()
-            } else {
-                Text(phase.shortText)
+                    .minimumScaleFactor(0.6)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 46, alignment: .trailing)
+            } else if let minuteText = phase.staticMinuteText {
+                Text(minuteText)
                     .font(.caption2)
                     .fontWeight(.semibold)
+                    .monospacedDigit()
                     .foregroundColor(statusColor)
             }
         }

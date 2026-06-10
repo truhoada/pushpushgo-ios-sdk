@@ -133,6 +133,19 @@ public enum MatchPhase: String, Codable, CaseIterable, Sendable {
         }
     }
     
+    /// Static minute marker for the Dynamic Island compact slot, shown for
+    /// phases where no live clock runs — the minute the match clock stopped
+    /// at.
+    public var staticMinuteText: String? {
+        switch self {
+        case .halfTimeBreak:            return "45'"
+        case .extraTimeBreak, .fullTime: return "90'"
+        case .extraTimeHalfTimeBreak:   return "105'"
+        case .penaltyShootout:          return "120'"
+        default:                        return nil
+        }
+    }
+
     /// Color representing the current phase state for UI display
     public var color: Color {
         if isPlaying { return .green }
