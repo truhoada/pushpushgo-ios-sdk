@@ -174,6 +174,33 @@ public class LiveActivityImageManager {
         guard let match = files.first(where: { $0.hasPrefix(prefix) }) else { return nil }
         return UIImage(contentsOfFile: directory.appendingPathComponent(match).path)
     }
+
+    /// Load an image by its backend `imageType`, downsampled to `targetSize`
+    /// (in points). The Dynamic Island compact presentation silently drops
+    /// `Image` views whose backing bitmap is much larger than the slot —
+    /// `.resizable().frame(...)` is not enough there — so widget views must
+    /// request a thumbnail no larger than what they actually render.
+    public func loadImage(
+        imageType: PPGLiveActivityImageType,
+        campaignId: String,
+        targetSize: CGSize
+    ) -> UIImage? {
+        guard let image = loadImage(imageType: imageType, campaignId: campaignId) else { return nil }
+        let scale: CGFloat = 3 // render @3x so badges stay sharp on all devices
+        let maxPixels = CGSize(width: targetSize.width * scale, height: targetSize.height * scale)
+        let srcPixels = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        guard srcPixels.width > maxPixels.width || srcPixels.height > maxPixels.height else {
+            return image
+        }
+        let ratio = min(maxPixels.width / srcPixels.width, maxPixels.height / srcPixels.height)
+        let newSize = CGSize(width: srcPixels.width * ratio, height: srcPixels.height * ratio)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1 // newSize is already in pixels
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: newSize, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
     
     /// Remove all cached images that belong to a given campaign.
     public func removeAssets(forCampaign campaignId: String) {

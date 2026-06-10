@@ -133,7 +133,11 @@ public struct PPGMatchLockScreenView: View {
     ) -> some View {
         let campaignId = context.attributes.liveNotificationId
         return VStack(alignment: .center, spacing: 4) {
-            if let image = LiveActivityImageManager.shared.loadImage(imageType: imageType, campaignId: campaignId) {
+            if let image = LiveActivityImageManager.shared.loadImage(
+                imageType: imageType,
+                campaignId: campaignId,
+                targetSize: CGSize(width: 48, height: 48)
+            ) {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)

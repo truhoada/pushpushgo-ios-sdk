@@ -316,7 +316,13 @@ public struct PPGMatchDynamicIsland {
     
     private func teamBadge(imageType: PPGLiveActivityImageType, size: CGFloat) -> some View {
         Group {
-            if let image = LiveActivityImageManager.shared.loadImage(imageType: imageType, campaignId: context.attributes.liveNotificationId) {
+            // Downsampled load — the compact island silently refuses to draw
+            // bitmaps much larger than the slot, so hand it a thumbnail.
+            if let image = LiveActivityImageManager.shared.loadImage(
+                imageType: imageType,
+                campaignId: context.attributes.liveNotificationId,
+                targetSize: CGSize(width: size, height: size)
+            ) {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
