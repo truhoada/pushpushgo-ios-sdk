@@ -131,6 +131,25 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         
         observePushToStartToken()
         observeActivityLifecycle()
+        adoptExistingActivities()
+    }
+
+    /// Track activities that were already running when this subscriber
+    /// started (e.g. app relaunch mid-campaign). `Activity<T>.activityUpdates`
+    /// only emits NEW activities, so without this pass a pre-existing
+    /// activity's `pushTokenUpdates` would never be observed and rotated
+    /// update tokens would never reach the backend. Deliberately does NOT
+    /// report a `started` statistics event — the activity started in a
+    /// previous app session and was reported then.
+    private func adoptExistingActivities() {
+        for activity in Activity<T>.activities where trackedActivities[activity.id] == nil {
+            LiveActivityLogger.shared.info(
+                "Adopted existing activity [\(liveNotificationId)]: \(activity.id)"
+            )
+            onActivityAppeared?(activity.id, liveNotificationId)
+            trackActivity(activity)
+            prefetchImages(for: activity)
+        }
     }
     
     /// Cancel local observation and unregister with backend.
