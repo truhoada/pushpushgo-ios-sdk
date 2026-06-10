@@ -273,6 +273,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 LiveActivityLogger.shared.info(
                     "Bootstrap: patched existing activity \(existing.id) with REST state for \(liveNotificationId)"
                 )
+                prefetchImages(for: existing)
             } else {
                 guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
                 let activity = try Activity.request(
@@ -286,6 +287,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 onActivityAppeared?(activity.id, liveNotificationId)
                 statusHandler(.activityStarted(activityId: activity.id))
                 trackActivity(activity)
+                prefetchImages(for: activity)
                 reportEvent(.started, liveDataVersion: liveDataVersion(of: state), activityId: activity.id)
             }
         } catch {
@@ -317,11 +319,40 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                 self.onActivityAppeared?(activityId, self.liveNotificationId)
                 self.statusHandler(.activityStarted(activityId: activityId))
                 self.trackActivity(activity)
+                self.prefetchImages(for: activity)
                 self.reportEvent(.started, liveDataVersion: self.liveDataVersion(of: activity.content.state), activityId: activityId)
             }
         }
     }
     
+    /// Download badge images referenced by the activity's attributes into the
+    /// shared App Group cache, then nudge a same-content re-render so the
+    /// widget swaps placeholders for the real badges. Required for the
+    /// push-to-start path: it has no REST bootstrap, so the host app never
+    /// gets a chance to prefetch and the cache for a fresh campaign is empty.
+    private func prefetchImages(for activity: Activity<T>) {
+        guard let prefetchable = activity.attributes as? PPGLiveActivityImagePrefetchable else { return }
+        let images = prefetchable.prefetchableImages
+        guard !images.isEmpty else { return }
+        let campaignId = prefetchable.imageCampaignId
+        Task {
+            var cachedAny = false
+            for (type, url) in images {
+                let ok = await LiveActivityImageManager.shared.prefetch(
+                    from: url,
+                    imageType: type,
+                    campaignId: campaignId
+                )
+                cachedAny = cachedAny || ok
+            }
+            guard cachedAny else { return }
+            await activity.update(activity.content)
+            LiveActivityLogger.shared.debug(
+                "Prefetched \(images.count) badge image(s) for \(campaignId); re-rendered activity \(activity.id)"
+            )
+        }
+    }
+
     private func trackActivity(_ activity: Activity<T>) {
         let activityId = activity.id
         trackedActivities[activityId]?.cancel()

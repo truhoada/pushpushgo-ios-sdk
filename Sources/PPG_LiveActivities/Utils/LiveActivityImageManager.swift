@@ -9,6 +9,20 @@ import Foundation
 import UIKit
 import CryptoKit
 
+/// `ActivityAttributes` types whose payload carries remote image URLs that
+/// widget views render from the shared image cache. The SDK prefetches these
+/// images when an activity appears via push-to-start — that path has no REST
+/// bootstrap, so the host app never gets a chance to download them and the
+/// widget would otherwise show placeholder badges for the whole campaign.
+@available(iOS 17.2, *)
+public protocol PPGLiveActivityImagePrefetchable {
+    /// Campaign id used to scope cached files — must match the `campaignId`
+    /// widget views pass to `loadImage(imageType:campaignId:)`.
+    var imageCampaignId: String { get }
+    /// Remote URLs keyed by their image role.
+    var prefetchableImages: [PPGLiveActivityImageType: String] { get }
+}
+
 @available(iOS 17.2, *)
 public class LiveActivityImageManager {
     

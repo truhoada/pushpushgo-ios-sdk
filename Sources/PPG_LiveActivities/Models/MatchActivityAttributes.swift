@@ -574,3 +574,17 @@ extension MatchActivityAttributes.ContentState: PPGLiveDataVersioned {}
 extension MatchActivityAttributes: PPGLiveActivityDesignCacheable {
     public var iosDesign: PPGFootballMatchIOSDesign { design.ios }
 }
+
+// PPGLiveActivityImagePrefetchable
+
+@available(iOS 17.2, *)
+extension MatchActivityAttributes: PPGLiveActivityImagePrefetchable {
+    public var imageCampaignId: String { liveNotificationId }
+
+    public var prefetchableImages: [PPGLiveActivityImageType: String] {
+        var images: [PPGLiveActivityImageType: String] = [:]
+        if let url = content.homeTeamImage, !url.isEmpty { images[.homeTeamBadge] = url }
+        if let url = content.awayTeamImage, !url.isEmpty { images[.awayTeamBadge] = url }
+        return images
+    }
+}
