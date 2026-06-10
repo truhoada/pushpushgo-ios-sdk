@@ -157,21 +157,35 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     private func observePushToStartToken() {
         pushToStartTask = Task { [weak self] in
             guard let self else { return }
-            
+
+            // Seed from the current token first — after an app relaunch the
+            // async stream may emit late or not at all (known ActivityKit
+            // behavior), while the token is already available synchronously.
+            if let current = Activity<T>.pushToStartToken {
+                await self.handlePushToStartToken(Self.hexString(current))
+            }
+
             for await tokenData in Activity<T>.pushToStartTokenUpdates {
                 if Task.isCancelled { break }
-                
-                let tokenHex = Self.hexString(tokenData)
-                LiveActivityLogger.shared.debug(
-                    "Push-to-start token [\(self.liveNotificationId)]: \(tokenHex)"
-                )
-                self.lastRemoteStartToken = tokenHex
-                // Only POST once — if we already have a subscriberId, the
-                // backend knows this device. Subsequent token rotations are
-                // forwarded via PUT /endpoint when the update-token changes.
-                guard self.subscriberId == nil else { continue }
-                await self.registerWithBackend(remoteStartToken: tokenHex)
+                await self.handlePushToStartToken(Self.hexString(tokenData))
             }
+        }
+    }
+
+    private func handlePushToStartToken(_ tokenHex: String) async {
+        LiveActivityLogger.shared.debug(
+            "Push-to-start token [\(liveNotificationId)]: \(tokenHex)"
+        )
+        lastRemoteStartToken = tokenHex
+        if subscriberId == nil {
+            // First token registers the subscriber; registration replays any
+            // queued update tokens once the backend returns a subscriberId.
+            await registerWithBackend(remoteStartToken: tokenHex)
+        } else {
+            // Already registered — replay update tokens that were queued
+            // while no remoteStartToken was known. Rotated push-to-start
+            // tokens reach the backend with the next PUT /endpoint.
+            await flushPendingUpdateTokens()
         }
     }
     
@@ -381,6 +395,17 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         )
         trackedActivities[activityId] = tracker
         tracker.start()
+
+        // Seed from the current update token — `pushTokenUpdates` does not
+        // re-emit a token that was issued before this observer attached.
+        if let tokenData = activity.pushToken {
+            let tokenHex = Self.hexString(tokenData)
+            Task { [weak self] in
+                guard let self else { return }
+                self.onActivityTokenUpdate?(activityId, tokenHex)
+                await self.forwardActivityUpdateToken(activityId: activityId, updateToken: tokenHex)
+            }
+        }
     }
 
     // Statistics events
@@ -450,15 +475,19 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     
     private func forwardActivityUpdateToken(activityId: String, updateToken: String) async {
         // Backend's PUT /endpoint requires `remoteStartToken` to be sent
-        // alongside `updateToken`. If we never saw a push-to-start token
-        // (e.g. activity was started locally for testing), bail out.
+        // alongside `updateToken`. ActivityKit can emit the activity update
+        // token BEFORE the push-to-start token (notably after an app
+        // relaunch, where `pushToStartTokenUpdates` may fire late or not at
+        // all) — queue the token instead of dropping it and replay once the
+        // push-to-start token arrives.
         guard let remoteStartToken = lastRemoteStartToken else {
+            pendingUpdateTokens[activityId] = updateToken
             LiveActivityLogger.shared.debug(
-                "Skipping update-token forward — no remoteStartToken yet"
+                "Queued update-token for \(activityId) — waiting for remoteStartToken"
             )
             return
         }
-        
+
 
         // ActivityKit emits the activity update token a moment after the
         // push-to-start token, so the POST may still be in flight here —
