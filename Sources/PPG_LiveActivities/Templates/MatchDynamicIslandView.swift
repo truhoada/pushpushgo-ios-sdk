@@ -62,7 +62,7 @@ public struct PPGMatchDynamicIsland {
     /// so it sits beside the camera and reclaims the empty top space.
     @ViewBuilder
     private var expandedHeader: some View {
-        if let hotMessage = context.state.hotMessage {
+        if let hotMessage = context.state.hotMessage, !context.isStale {
             PPGHotMessageView(
                 hotMessage: hotMessage,
                 activityID: context.activityID,

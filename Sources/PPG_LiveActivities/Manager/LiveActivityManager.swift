@@ -72,9 +72,12 @@ internal class LiveActivityManager {
             LiveActivityLogger.shared.error("Activity not found: \(activityId)")
             return
         }
-        
+
         await activity.update(
-            ActivityContent<T.ContentState>(state: state, staleDate: nil)
+            ActivityContent<T.ContentState>(
+                state: state,
+                staleDate: hotMessageStaleDate(state: state, activityId: activityId)
+            )
         )
         
         let templateId = activeActivities[activityId]?.templateId ?? "unknown"
@@ -326,7 +329,22 @@ internal class LiveActivityManager {
     }
     
     // Hot message auto-clear
-    
+
+    /// Stale-date for a state carrying a hot message: the instant the banner
+    /// must disappear. Widget views hide the banner when `context.isStale`,
+    /// so the system-driven re-render at `staleDate` clears it even if the
+    /// app process is suspended before the scheduled auto-clear Task fires.
+    /// Returns `nil` (no stale-date) for states without a hot message.
+    private func hotMessageStaleDate<S>(state: S, activityId: String) -> Date? {
+        guard let carrier = state as? PPGHotMessageCarrying,
+              let hot = carrier.hotMessage else { return nil }
+        let receivedAt = HotMessageStore.shared.receivedAt(
+            activityID: activityId,
+            hotMessageId: hot.id
+        )
+        return hot.endDate(receivedAt: receivedAt)
+    }
+
     /// Schedule a deterministic follow-up `Activity.update` that drops
     /// `hotMessage` from the content state at `receivedAt + durationSeconds`.
     ///

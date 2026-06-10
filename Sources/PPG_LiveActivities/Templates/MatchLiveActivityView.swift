@@ -46,8 +46,10 @@ public struct PPGMatchLockScreenView: View {
             backgroundView
             
             VStack(spacing: 0) {
-                // Hot message banner — transient, auto-hides after duration
-                if let hotMessage = context.state.hotMessage {
+                // Hot message banner — transient, auto-hides after duration.
+                // `!context.isStale` guarantees a system-driven hide at
+                // `staleDate` even when the app process is suspended.
+                if let hotMessage = context.state.hotMessage, !context.isStale {
                     PPGHotMessageView(
                         hotMessage: hotMessage,
                         activityID: context.activityID
