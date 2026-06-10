@@ -277,7 +277,37 @@ public struct PPGMatchDynamicIsland {
         }
     }
     
+    /// Trailing slot: hot message takes over from the minutes/status for the
+    /// duration of its visibility window, then the status content returns.
+    /// The fallback has to live here (not in `PPGHotMessageView`) because an
+    /// expired hot message must yield the slot back, not leave it empty.
+    @ViewBuilder
     private var compactTrailing: some View {
+        if let hot = context.state.hotMessage, !context.isStale {
+            let receivedAt = HotMessageStore.shared.receivedAt(
+                activityID: context.activityID,
+                hotMessageId: hot.id
+            )
+            let endDate = hot.endDate(receivedAt: receivedAt)
+            TimelineView(.explicit([Date(), endDate])) { timeline in
+                if timeline.date < endDate {
+                    Text(hot.text)
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(maxWidth: 90)
+                } else {
+                    compactStatusContent
+                }
+            }
+        } else {
+            compactStatusContent
+        }
+    }
+
+    private var compactStatusContent: some View {
         HStack(spacing: 3) {
             if phase.isPlaying {
                 Circle()
