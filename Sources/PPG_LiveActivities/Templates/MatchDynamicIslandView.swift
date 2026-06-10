@@ -104,12 +104,10 @@ public struct PPGMatchDynamicIsland {
                 teamView(name: context.attributes.awayTeamName, imageType: .awayTeamBadge)
             }
             
+            // First action's `alignment` lays out the whole group — same
+            // rule as the Lock Screen; other styles stay per-button.
             if !context.attributes.actionSet.isEmpty {
-                HStack(spacing: 8) {
-                    ForEach(Array(context.attributes.actionSet.prefix(2).enumerated()), id: \.offset) { index, action in
-                        actionButton(action, index: index)
-                    }
-                }
+                actionButtonsRow
             }
         }
     }
@@ -178,8 +176,27 @@ public struct PPGMatchDynamicIsland {
     }
     
     @ViewBuilder
-    private func actionButton(_ action: PPGLiveActivityAction, index: Int) -> some View {
-        let appearance = action.design.ios.appearance.lightMode
+    private var actionButtonsRow: some View {
+        let actions = Array(context.attributes.actionSet.prefix(2).enumerated())
+        let groupAlignment = context.attributes.actionSet.first?.design.ios.alignment ?? .stretch
+        HStack(spacing: 8) {
+            if groupAlignment == .right || groupAlignment == .center {
+                Spacer(minLength: 0)
+            }
+            ForEach(actions, id: \.offset) { index, action in
+                actionButton(action, index: index, isStretched: groupAlignment == .stretch)
+            }
+            if groupAlignment == .left || groupAlignment == .center {
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func actionButton(_ action: PPGLiveActivityAction, index: Int, isStretched: Bool) -> some View {
+        // The Dynamic Island is always rendered on a dark background,
+        // so use the dark-mode appearance regardless of system scheme.
+        let appearance = action.design.ios.appearance.darkMode
         let destination: URL? = {
             switch action {
             case .url(_, let urlStr, _): return URL(string: urlStr)
@@ -197,9 +214,9 @@ public struct PPGMatchDynamicIsland {
             destination: destination
         )
         if let url {
-            Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius) }
+            Link(destination: url) { ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius, isStretched: isStretched) }
         } else {
-            ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius)
+            ctaLabel(text: action.name, appearance: appearance, cornerRadius: action.design.ios.borderRadius, isStretched: isStretched)
         }
     }
     
@@ -239,7 +256,7 @@ public struct PPGMatchDynamicIsland {
         }
     }
     
-    private func ctaLabel(text: String, appearance: PPGActionIOSAppearance, cornerRadius: Double) -> some View {
+    private func ctaLabel(text: String, appearance: PPGActionIOSAppearance, cornerRadius: Double, isStretched: Bool) -> some View {
         let textColor: Color = {
             if case .basic(let hex) = appearance.textColor { return Color(hex: hex) }
             return .white
@@ -249,14 +266,26 @@ public struct PPGMatchDynamicIsland {
             if case .basic(let hex) = bg { return Color(hex: hex) }
             return nil
         }()
+        let borderColor: Color? = {
+            guard let border = appearance.border, case .basic(let hex) = border.color else { return nil }
+            return Color(hex: hex)
+        }()
+        let borderWidth = appearance.border?.width ?? 0
         return Text(text)
             .font(.caption2)
             .fontWeight(.semibold)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
-            .background(bgColor ?? Color.blue.opacity(0.3))
             .foregroundColor(textColor)
-            .cornerRadius(cornerRadius)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(maxWidth: isStretched ? .infinity : nil)
+            .background(bgColor ?? .clear)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                if let borderColor {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(borderColor, lineWidth: borderWidth)
+                }
+            }
     }
     
     // Compact Views — badge(22) + score:score + badge(22) in leading, phase in trailing

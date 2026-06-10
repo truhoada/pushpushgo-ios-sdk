@@ -102,15 +102,13 @@ public struct PPGMatchLockScreenView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 
-                // Action buttons (custom design + alignment) - render up to 2
+                // Action buttons (custom design) - render up to 2.
+                // The first action's `alignment` lays out the whole group;
+                // every other style (colors, border, radius) stays per-button.
                 if !context.attributes.actionSet.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(Array(context.attributes.actionSet.prefix(2).enumerated()), id: \.offset) { index, action in
-                            actionRow(action, index: index)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                    actionButtonsRow
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
                 }
             }
         }
@@ -232,28 +230,23 @@ public struct PPGMatchLockScreenView: View {
     }
     
     // Action Row
-    
-    private func actionRow(_ action: PPGLiveActivityAction, index: Int) -> some View {
-        HStack(spacing: 0) {
-            actionButtonAligned(action, index: index)
-        }
-    }
 
+    /// Lay the (up to two) buttons out as one group, positioned by the
+    /// FIRST action's `alignment`.
     @ViewBuilder
-    private func actionButtonAligned(_ action: PPGLiveActivityAction, index: Int) -> some View {
-        switch action.design.ios.alignment {
-        case .left:
-            actionButton(action, index: index)
-            Spacer(minLength: 0)
-        case .right:
-            Spacer(minLength: 0)
-            actionButton(action, index: index)
-        case .center:
-            Spacer(minLength: 0)
-            actionButton(action, index: index)
-            Spacer(minLength: 0)
-        case .stretch:
-            actionButton(action, index: index, isStretched: true)
+    private var actionButtonsRow: some View {
+        let actions = Array(context.attributes.actionSet.prefix(2).enumerated())
+        let groupAlignment = context.attributes.actionSet.first?.design.ios.alignment ?? .stretch
+        HStack(spacing: 8) {
+            if groupAlignment == .right || groupAlignment == .center {
+                Spacer(minLength: 0)
+            }
+            ForEach(actions, id: \.offset) { index, action in
+                actionButton(action, index: index, isStretched: groupAlignment == .stretch)
+            }
+            if groupAlignment == .left || groupAlignment == .center {
+                Spacer(minLength: 0)
+            }
         }
     }
 
