@@ -118,5 +118,5 @@ internal struct PPGUpdateLiveNotificationEndpointRequest: Codable, Sendable {
 /// Update on every release tag.
 @available(iOS 17.2, *)
 internal enum PPGLiveActivitiesVersion {
-    static let current = "0.1.0"
+    static let current = "4.3.0"
 }

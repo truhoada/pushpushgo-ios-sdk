@@ -29,7 +29,7 @@ PPG panel / REST API ──▶ PPG backend ──▶ APNs ──▶ Live Activit
 ### CocoaPods
 
 ```ruby
-pod 'PPG_LiveActivities', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.2.0'
+pod 'PPG_LiveActivities', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.3.0'
 ```
 
 ## App setup (one-time)

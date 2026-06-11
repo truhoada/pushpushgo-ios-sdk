@@ -1,6 +1,8 @@
 #  Setup Guide
 
 > [!IMPORTANT]
+> **Version 4.3.0**
+>
 > 🎉 **New Feature: Live Activities SDK**
 >
 > Display real-time activity tracking on the Lock Screen and in the Dynamic Island,
@@ -63,7 +65,7 @@ Choose one of options:
 #### Cocoapods
 In your **Podfile** add to the application target:
 ```bash
-    pod 'PPG_framework', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.2.0'
+    pod 'PPG_framework', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.3.0'
 ```
 Then run
 
@@ -287,7 +289,7 @@ If you are using Cocoapods you need to add NSE to Podfile. Next to your applicat
 target 'PPGNotificationServiceExtension' do
   use_frameworks!
   use_modular_headers!
-  pod 'PPG_framework', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.2.0'
+  pod 'PPG_framework', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.3.0'
 end
 ```
 **Note:** While compiling app with Service Extension you might face a problem with UIApplication.shared
