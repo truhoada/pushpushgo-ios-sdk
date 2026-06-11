@@ -31,6 +31,13 @@ public class LiveActivityImageManager {
     private var appGroupId: String?
     private let fileManager = FileManager.default
     private let imageDirectoryName = "ppg_live_activity_images"
+
+    /// In-memory cache for downsampled badges. Widget `body` evaluations call
+    /// `loadImage(...targetSize:)` on every render — without this cache each
+    /// render pays a directory scan + disk read + bitmap redraw per badge.
+    /// Only hits are cached (misses retry disk so a just-prefetched file is
+    /// picked up on the next render).
+    private let thumbnailCache = NSCache<NSString, UIImage>()
     
     /// Maximum age for cached images before cleanup (default: 24 hours)
     public var maxAssetAge: TimeInterval = 24 * 60 * 60
@@ -157,7 +164,9 @@ public class LiveActivityImageManager {
                 LiveActivityLogger.shared.error("Cannot build image path — is App Group configured?")
                 return false
             }
-            try data.write(to: targetPath)
+            // .atomic — the widget process may read the file at any moment;
+            // a partial write would render as a permanent placeholder.
+            try data.write(to: targetPath, options: .atomic)
             LiveActivityLogger.shared.debug("Saved image: \(targetPath.lastPathComponent)")
             return true
         } catch {
@@ -185,7 +194,17 @@ public class LiveActivityImageManager {
         campaignId: String,
         targetSize: CGSize
     ) -> UIImage? {
+        let cacheKey = "\(campaignId)_\(imageType.rawValue)_\(Int(targetSize.width))x\(Int(targetSize.height))" as NSString
+        if let cached = thumbnailCache.object(forKey: cacheKey) {
+            return cached
+        }
         guard let image = loadImage(imageType: imageType, campaignId: campaignId) else { return nil }
+        let thumbnail = downsampled(image, to: targetSize)
+        thumbnailCache.setObject(thumbnail, forKey: cacheKey)
+        return thumbnail
+    }
+
+    private func downsampled(_ image: UIImage, to targetSize: CGSize) -> UIImage {
         let scale: CGFloat = 3 // render @3x so badges stay sharp on all devices
         let maxPixels = CGSize(width: targetSize.width * scale, height: targetSize.height * scale)
         let srcPixels = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
@@ -298,7 +317,7 @@ public class LiveActivityImageManager {
         }
         
         do {
-            try data.write(to: path)
+            try data.write(to: path, options: .atomic)
             LiveActivityLogger.shared.debug("Saved image: \(fileName(for: urlString))")
             return true
         } catch {
