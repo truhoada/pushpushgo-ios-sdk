@@ -137,3 +137,31 @@ public struct PPGLiveNotificationDTO: Codable, Sendable, Hashable {
         return nil
     }
 }
+
+// Decoding
+
+@available(iOS 17.2, *)
+public extension PPGLiveNotificationDTO {
+    /// Decode a campaign payload as returned by
+    /// `GET /live-notifications/{id}` — the `Data` handed to `subscribe`'s
+    /// `onCampaignAlreadyActive` closure. Backend dates are ISO-8601 with or
+    /// without fractional seconds; a plain `JSONDecoder` cannot parse them
+    /// without this date strategy.
+    static func decode(from data: Data) throws -> PPGLiveNotificationDTO {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { dec in
+            let container = try dec.singleValueContainer()
+            let raw = try container.decode(String.self)
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = formatter.date(from: raw) { return date }
+            formatter.formatOptions = [.withInternetDateTime]
+            if let date = formatter.date(from: raw) { return date }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Cannot parse ISO-8601 date: \(raw)"
+            )
+        }
+        return try decoder.decode(PPGLiveNotificationDTO.self, from: data)
+    }
+}
