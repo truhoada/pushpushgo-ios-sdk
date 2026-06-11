@@ -1,0 +1,434 @@
+//
+//  LiveActivityManager.swift
+//  PPG_LiveActivities
+//
+//  Created by PushPushGo on 13/03/2026.
+//
+
+import Foundation
+import ActivityKit
+
+@available(iOS 17.2, *)
+internal class LiveActivityManager {
+    
+    private let repository: LiveActivityRepository
+    private var activeActivities: [String: LiveActivityInfo] = [:]
+    private var tokenObservationTasks: [String: Task<Void, Never>] = [:]
+    private var hotMessageClearTasks: [String: Task<Void, Never>] = [:]
+    private static let persistenceKey = "PPGLiveActivities_Active"
+    
+    init(repository: LiveActivityRepository) {
+        self.repository = repository
+        restoreActiveActivities()
+    }
+    
+    // Lifecycle
+    
+    func startActivity<T: ActivityAttributes>(
+        attributes: T,
+        initialState: T.ContentState,
+        templateId: String
+    ) -> String? {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            LiveActivityLogger.shared.error("Live Activities are not enabled on this device")
+            return nil
+        }
+        do {
+            let activity = try Activity.request(
+                attributes: attributes,
+                content: .init(state: initialState, staleDate: nil),
+                pushType: .token
+            )
+            
+            let activityId = activity.id
+            LiveActivityLogger.shared.info("Activity started [\(templateId)]: \(activityId)")
+            
+            let info = LiveActivityInfo(
+                activityId: activityId,
+                templateId: templateId,
+                pushToken: nil,
+                startedAt: Date()
+            )
+            activeActivities[activityId] = info
+            persistActiveActivities()
+            
+            observePushTokenUpdates(for: activity, templateId: templateId)
+            scheduleHotMessageAutoClear(T.self, activityId: activityId, state: initialState)
+            
+            return activityId
+        } catch {
+            LiveActivityLogger.shared.error("Failed to start activity [\(templateId)]: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    /// Update any Live Activity with a new content state.
+    func updateActivity<T: ActivityAttributes>(
+        _ type: T.Type,
+        activityId: String,
+        state: T.ContentState
+    ) async {
+        guard let activity = findActivity(T.self, byId: activityId) else {
+            LiveActivityLogger.shared.error("Activity not found: \(activityId)")
+            return
+        }
+
+        await activity.update(
+            ActivityContent<T.ContentState>(
+                state: state,
+                staleDate: hotMessageStaleDate(state: state, activityId: activityId)
+            )
+        )
+        
+        let templateId = activeActivities[activityId]?.templateId ?? "unknown"
+        LiveActivityLogger.shared.debug("Activity updated [\(templateId)]: \(activityId)")
+        scheduleHotMessageAutoClear(T.self, activityId: activityId, state: state)
+    }
+    
+    /// End any Live Activity.
+    func endActivity<T: ActivityAttributes>(
+        _ type: T.Type,
+        activityId: String,
+        finalState: T.ContentState?,
+        dismissPolicy: LiveActivityDismissPolicy
+    ) async {
+        guard let activity = findActivity(T.self, byId: activityId) else {
+            LiveActivityLogger.shared.error("Activity not found: \(activityId)")
+            return
+        }
+        
+        let content: ActivityContent<T.ContentState>? = finalState.map {
+            ActivityContent(state: $0, staleDate: nil)
+        }
+        
+        await activity.end(content, dismissalPolicy: dismissPolicy.toSystemPolicy())
+        
+        let templateId = activeActivities[activityId]?.templateId ?? "unknown"
+        cleanupActivity(activityId)
+        LiveActivityLogger.shared.info("Activity ended [\(templateId)]: \(activityId)")
+    }
+    
+    /// End all running activities for a given `ActivityAttributes` type.
+    func endAllActivities<T: ActivityAttributes>(ofType type: T.Type) async {
+        for activity in Activity<T>.activities {
+            await activity.end(nil, dismissalPolicy: .immediate)
+            cleanupActivity(activity.id)
+        }
+        LiveActivityLogger.shared.info("All activities of type \(T.self) ended")
+    }
+    
+    func getActiveActivities() -> [LiveActivityInfo] {
+        return Array(activeActivities.values)
+    }
+    
+    /// Register an Activity that was created externally (via push-to-start)
+    /// into the in-memory registry so that `getActiveActivities()` reports
+    /// it. The `templateId` typically carries the `liveNotificationId` for
+    /// push-spawned activities — useful for UI inspection.
+    func registerExternalActivity(activityId: String, templateId: String) {
+        if activeActivities[activityId] != nil { return }
+        let info = LiveActivityInfo(
+            activityId: activityId,
+            templateId: templateId,
+            pushToken: nil,
+            startedAt: Date()
+        )
+        activeActivities[activityId] = info
+        persistActiveActivities()
+        LiveActivityLogger.shared.debug(
+            "Registered push-started activity \(activityId) for \(templateId)"
+        )
+    }
+    
+    // Live Notification Subscriber Management (per-notification flow)
+    
+    /// Active subscribers, keyed by `liveNotificationId`. Stored as `Any`
+    /// because each subscriber binds to a different `ActivityAttributes`
+    /// generic type and Swift can't store heterogeneous generics directly.
+    private var subscribers: [String: Any] = [:]
+    
+    func subscribe<T: ActivityAttributes>(
+        _ type: T.Type,
+        liveNotificationId: String,
+        onCampaignAlreadyActive: (@Sendable (Data) async throws -> (T, T.ContentState)?)? = nil,
+        onStatus: @escaping @Sendable (LiveNotificationSubscriptionStatus) -> Void
+    ) {
+
+        if subscribers[liveNotificationId] != nil {
+            LiveActivityLogger.shared.debug(
+                "Already subscribed to \(liveNotificationId); skipping re-subscribe"
+            )
+            return
+        }
+        
+        let subscriber = LiveNotificationSubscriber<T>(
+            repository: repository,
+            liveNotificationId: liveNotificationId,
+            installationId: InstallationIDStore.shared.installationId,
+            statusHandler: onStatus,
+            onActivityAppeared: { [weak self] activityId, templateId in
+                self?.registerExternalActivity(activityId: activityId, templateId: templateId)
+            },
+            onActivityTokenUpdate: { [weak self] activityId, token in
+                self?.updateStoredToken(activityId: activityId, token: token)
+            },
+            onActivityCleared: { [weak self] activityId in
+                self?.cleanupActivity(activityId)
+            },
+            onContentStateUpdated: { [weak self] activityId, state in
+                self?.scheduleHotMessageAutoClear(T.self, activityId: activityId, state: state)
+            },
+            onCampaignAlreadyActive: onCampaignAlreadyActive
+        )
+        subscribers[liveNotificationId] = subscriber
+        Task { await subscriber.start() }
+        
+        LiveActivityLogger.shared.info(
+            "Subscribed to liveNotification: \(liveNotificationId)"
+        )
+    }
+    
+    /// Report a Live Activity tap (`clicked` / `clicked_1` / `clicked_2`) to
+    /// the statistics endpoint. Called from `LiveActivitiesSDK.handleURL(...)`
+    /// after a `ppg-la://click` URL is intercepted. The `subscriberId` is
+    /// looked up from `SubscriberIDStore` (the originating subscriber may be
+    /// gone after an app relaunch). No-op if the device never registered.
+    func reportClickEvent(
+        liveNotificationId: String,
+        type: PPGLiveNotificationStatisticsEventType,
+        liveDataVersion: Int
+    ) {
+        guard let subscriberId = SubscriberIDStore.shared.subscriberId(for: liveNotificationId) else {
+            LiveActivityLogger.shared.debug(
+                "Skipping \(type.rawValue) event — no subscriberId stored for \(liveNotificationId)"
+            )
+            return
+        }
+        let event = PPGLiveNotificationStatisticsEvent(type: type, liveDataVersion: liveDataVersion)
+        let repository = self.repository
+        let installationId = InstallationIDStore.shared.installationId
+        Task {
+            do {
+                try await repository.collectEvents(
+                    liveNotificationId: liveNotificationId,
+                    installationId: installationId,
+                    subscriberId: subscriberId,
+                    events: [event]
+                )
+                LiveActivityLogger.shared.info(
+                    "Reported \(type.rawValue) event for \(liveNotificationId) (v=\(liveDataVersion))"
+                )
+            } catch {
+                LiveActivityLogger.shared.error(
+                    "Failed to report \(type.rawValue) event: \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    func unsubscribe(liveNotificationId: String) {
+        if let any = subscribers.removeValue(forKey: liveNotificationId) {
+            // Subscriber's `cancel()` is type-erased through `Any` cast.
+            // Use a small protocol to call it without re-binding generics.
+            (any as? LiveNotificationSubscriberCancellable)?.cancel()
+            LiveActivityLogger.shared.info(
+                "Unsubscribed from liveNotification: \(liveNotificationId)"
+            )
+        }
+    }
+    
+    // Push Token Management
+    
+    /// Observe `pushTokenUpdates` for a locally-started activity. We just
+    /// log + persist the token — forwarding to backend is the responsibility
+    /// of `LiveNotificationSubscriber` for activities started via push.
+    private func observePushTokenUpdates<T: ActivityAttributes>(
+        for activity: Activity<T>,
+        templateId: String
+    ) {
+        let activityId = activity.id
+        tokenObservationTasks[activityId]?.cancel()
+        
+        let task = Task { [weak self] in
+            for await tokenData in activity.pushTokenUpdates {
+                guard !Task.isCancelled, let self else { break }
+                
+                let tokenHex = tokenData.ppgHexString
+                LiveActivityLogger.shared.debug(
+                    "Push token [\(templateId)] \(activityId): \(tokenHex)"
+                )
+                self.updateStoredToken(activityId: activityId, token: tokenHex)
+            }
+        }
+        
+        tokenObservationTasks[activityId] = task
+    }
+    
+    private func updateStoredToken(activityId: String, token: String) {
+        guard let existing = activeActivities[activityId] else { return }
+        activeActivities[activityId] = LiveActivityInfo(
+            activityId: existing.activityId,
+            templateId: existing.templateId,
+            pushToken: token,
+            startedAt: existing.startedAt
+        )
+        persistActiveActivities()
+    }
+    
+    // Activity Lookup
+    
+    private func findActivity<T: ActivityAttributes>(_ type: T.Type, byId activityId: String) -> Activity<T>? {
+        return Activity<T>.activities.first { $0.id == activityId }
+    }
+    
+    // Persistence
+    
+    private func persistActiveActivities() {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let items = activeActivities.values.map {
+            PersistableActivityInfo(activityId: $0.activityId, templateId: $0.templateId, pushToken: $0.pushToken, startedAt: $0.startedAt)
+        }
+        if let data = try? encoder.encode(items) {
+            UserDefaults.standard.set(data, forKey: Self.persistenceKey)
+        }
+    }
+    
+    private func restoreActiveActivities() {
+        guard let data = UserDefaults.standard.data(forKey: Self.persistenceKey),
+              let persisted = try? JSONDecoder.iso8601.decode([PersistableActivityInfo].self, from: data) else { return }
+        
+        // Reconcile with actually running activities (match template for now)
+        let runningIds = Set(Activity<MatchActivityAttributes>.activities.map { $0.id })
+        
+        for info in persisted where runningIds.contains(info.activityId) {
+            activeActivities[info.activityId] = LiveActivityInfo(
+                activityId: info.activityId,
+                templateId: info.templateId,
+                pushToken: info.pushToken,
+                startedAt: info.startedAt
+            )
+            
+            if let activity = Activity<MatchActivityAttributes>.activities.first(where: { $0.id == info.activityId }) {
+                observePushTokenUpdates(for: activity, templateId: info.templateId)
+            }
+        }
+        
+        persistActiveActivities()
+        LiveActivityLogger.shared.debug("Restored \(activeActivities.count) active activities")
+    }
+    
+    private func cleanupActivity(_ activityId: String) {
+        activeActivities.removeValue(forKey: activityId)
+        tokenObservationTasks[activityId]?.cancel()
+        tokenObservationTasks.removeValue(forKey: activityId)
+        hotMessageClearTasks[activityId]?.cancel()
+        hotMessageClearTasks.removeValue(forKey: activityId)
+        HotMessageStore.shared.clear(activityID: activityId)
+        persistActiveActivities()
+    }
+    
+    // Hot message auto-clear
+
+    /// Stale-date for a state carrying a hot message: the instant the banner
+    /// must disappear. Widget views hide the banner when `context.isStale`,
+    /// so the system-driven re-render at `staleDate` clears it even if the
+    /// app process is suspended before the scheduled auto-clear Task fires.
+    /// Returns `nil` (no stale-date) for states without a hot message.
+    private func hotMessageStaleDate<S>(state: S, activityId: String) -> Date? {
+        guard let carrier = state as? PPGHotMessageCarrying,
+              let hot = carrier.hotMessage else { return nil }
+        let receivedAt = HotMessageStore.shared.receivedAt(
+            activityID: activityId,
+            hotMessageId: hot.id
+        )
+        return hot.endDate(receivedAt: receivedAt)
+    }
+
+    /// Schedule a deterministic follow-up `Activity.update` that drops
+    /// `hotMessage` from the content state at `receivedAt + durationSeconds`.
+    ///
+    /// This is the authoritative path for hiding hot messages — relying on
+    /// `TimelineView` alone is unreliable for sub-minute windows because the
+    /// system defers widget render budget. Every call cancels the previous
+    /// pending clear for this activity so backend-initiated updates take
+    /// precedence (option "backend wins"): a fresh `hotMessage` reschedules,
+    /// `hotMessage = nil` simply cancels.
+    private func scheduleHotMessageAutoClear<T: ActivityAttributes>(
+        _ type: T.Type,
+        activityId: String,
+        state: T.ContentState
+    ) {
+        hotMessageClearTasks[activityId]?.cancel()
+        hotMessageClearTasks.removeValue(forKey: activityId)
+        
+        guard let carrier = state as? PPGHotMessageCarrying,
+              let hot = carrier.hotMessage else { return }
+        
+        // Use HotMessageStore as the source of truth so the clear instant
+        // matches what the widget computed from the same `(activityId, hotMessageId)`.
+        // `endDate` is `min(receivedAt + maxDisplayDuration, expiresAt)` —
+        // shared with `PPGHotMessageView` so the auto-clear and the visual
+        // banner disappear at the same instant.
+        let receivedAt = HotMessageStore.shared.receivedAt(
+            activityID: activityId,
+            hotMessageId: hot.id
+        )
+        let endDate = hot.endDate(receivedAt: receivedAt)
+        let delay = max(0, endDate.timeIntervalSinceNow)
+        // If the message is already past its end (e.g. backend pushed a stale
+        // hot-message), bail out — leave it to the next push to clear it.
+        guard delay > 0 else { return }
+        let nanoseconds = UInt64(delay * 1_000_000_000)
+        
+        let hotMessageId = hot.id
+        let task = Task { [weak self] in
+            if nanoseconds > 0 {
+                try? await Task.sleep(nanoseconds: nanoseconds)
+            }
+            if Task.isCancelled { return }
+            guard let self else { return }
+            
+            // Re-find the live activity each time — it may have ended.
+            guard let activity = self.findActivity(T.self, byId: activityId) else { return }
+            
+            // If the latest content state has a different hot message id
+            // (i.e. backend already rotated to a new message), do nothing —
+            // the new message has its own scheduled clear.
+            if let currentCarrier = activity.content.state as? PPGHotMessageCarrying,
+               let currentHot = currentCarrier.hotMessage,
+               currentHot.id != hotMessageId {
+                return
+            }
+            
+            guard let currentCarrier = activity.content.state as? PPGHotMessageCarrying,
+                  let cleared = currentCarrier.clearingHotMessage() as? T.ContentState else { return }
+            
+            await activity.update(
+                ActivityContent<T.ContentState>(state: cleared, staleDate: nil)
+            )
+            LiveActivityLogger.shared.debug("Hot message auto-cleared for \(activityId)")
+        }
+        
+        hotMessageClearTasks[activityId] = task
+    }
+}
+
+// Persistence helpers
+
+@available(iOS 17.2, *)
+private struct PersistableActivityInfo: Codable {
+    let activityId: String
+    let templateId: String
+    let pushToken: String?
+    let startedAt: Date
+}
+
+@available(iOS 17.2, *)
+private extension JSONDecoder {
+    static let iso8601: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+}

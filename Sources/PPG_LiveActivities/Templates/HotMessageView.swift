@@ -1,0 +1,90 @@
+//
+//  HotMessageView.swift
+//  PPG_LiveActivities
+//
+//  Created by PushPushGo on 29/04/2026.
+//
+
+import SwiftUI
+import ActivityKit
+
+/// Renders a transient `PPGHotMessage` for exactly `durationSeconds` after
+/// the first render on the device, then auto-hides.
+///
+/// Uses SwiftUI `TimelineView(.explicit(...))` to instruct the system to
+/// re-render at the exact expiry moment — no timers, no polling, and no
+/// second push needed. The expiry timestamp is derived from
+/// `HotMessageStore.receivedAt(activityID:hotMessageId:)`, which persists
+/// the first-seen time per-Activity in the shared App Group so it is
+/// stable across multiple widget re-renders within the same window.
+///
+/// Pass a non-nil `hotMessage` and the current `activityID` from
+/// `ActivityViewContext.activityID` to render.
+@available(iOS 17.2, *)
+public struct PPGHotMessageView: View {
+    
+    private let hotMessage: PPGHotMessage
+    private let activityID: String
+    private let compact: Bool
+    
+    /// - Parameter compact: when `true`, renders a single-line, low-padding
+    ///   variant with no rounded banner background. Used by the Dynamic Island
+    ///   expanded view where vertical space is tight and a tall banner would
+    ///   push the action buttons out of the clipped region.
+    public init(hotMessage: PPGHotMessage, activityID: String, compact: Bool = false) {
+        self.hotMessage = hotMessage
+        self.activityID = activityID
+        self.compact = compact
+    }
+    
+    public var body: some View {
+        let receivedAt = HotMessageStore.shared.receivedAt(
+            activityID: activityID,
+            hotMessageId: hotMessage.id
+        )
+        // Effective end = min(receivedAt + maxDisplayDuration, expiresAt).
+        // The local cap (10s) protects design intent; `expiresAt` is the
+        // backend-controlled hard cutoff for stale messages.
+        let endDate = hotMessage.endDate(receivedAt: receivedAt)
+        
+        TimelineView(.explicit([Date(), endDate])) { timeline in
+            if timeline.date < endDate {
+                if compact {
+                    compactBanner
+                } else {
+                    messageBanner
+                }
+            }
+        }
+    }
+    
+    private var messageBanner: some View {
+        HStack(spacing: 8) {
+            Text(hotMessage.text)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 20, bottomTrailingRadius: 20, topTrailingRadius: 0, style: .continuous)
+                .fill(Color.black.opacity(0.45))
+        )
+    }
+    
+    private var compactBanner: some View {
+        Text(hotMessage.text)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+    }
+}
