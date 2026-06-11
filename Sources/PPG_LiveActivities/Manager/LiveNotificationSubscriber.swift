@@ -16,6 +16,10 @@
 //   3. On `cancel()` (typically `LiveActivitiesSDK.unsubscribe(...)`)
 //      DELETE `/subscribers/{installationId}` and tear down all tasks.
 //
+//  Implemented as an actor: state is mutated from several concurrent Tasks
+//  (push-to-start stream, activity watcher, per-activity token/content/state
+//  streams, bootstrap), so all access is serialized on the actor's executor.
+//
 
 import Foundation
 import ActivityKit
@@ -37,38 +41,38 @@ private struct LifecycleStatusEnvelope: Decodable {
 }
 
 @available(iOS 17.2, *)
-internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificationSubscriberCancellable {
-    
+internal actor LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificationSubscriberCancellable {
+
     private let repository: LiveActivityRepository
     private let liveNotificationId: String
     private let installationId: String
     private let statusHandler: @Sendable (LiveNotificationSubscriptionStatus) -> Void
-    
+
     /// Notified when a push-to-start Activity appears for this subscriber.
     /// Used by `LiveActivityManager` to add it to its `activeActivities`
     /// registry (which otherwise only sees locally-started activities).
     private let onActivityAppeared: (@Sendable (_ activityId: String, _ templateId: String) -> Void)?
-    
+
     /// Notified when a tracked Activity gets a new update push token.
     /// Used by `LiveActivityManager` to keep `LiveActivityInfo.pushToken`
     /// in sync for UI inspection.
     private let onActivityTokenUpdate: (@Sendable (_ activityId: String, _ token: String) -> Void)?
-    
+
     /// Notified when a tracked Activity ends (via `event:end` push).
     /// Used by `LiveActivityManager` to remove it from `activeActivities`.
     private let onActivityCleared: (@Sendable (_ activityId: String) -> Void)?
-    
+
     /// Notified on every ContentState change (including APNs `event:update`
     /// pushes). Used by `LiveActivityManager` to reschedule the hot-message
     /// auto-clear Task whenever a push delivers a new `hotMessage`.
     private let onContentStateUpdated: (@Sendable (_ activityId: String, _ state: T.ContentState) -> Void)?
-    
+
     /// Called after subscriber registration when no activity is running yet.
     /// Receives the raw JSON body from `GET /live-notifications/{id}`.
     /// Return `(attributes, initialState)` to start the activity locally
     /// (campaign already ONGOING), or `nil` to do nothing (not yet started).
     private let onCampaignAlreadyActive: (@Sendable (_ payload: Data) async throws -> (T, T.ContentState)?)?
-    
+
     private var pushToStartTask: Task<Void, Never>?
     private var activityWatchTask: Task<Void, Never>?
     private var trackedActivities: [String: ActivityTracker] = [:]
@@ -80,21 +84,22 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
     /// `(activityId, eventType)` keys already reported, so a single
     /// start/close is never POSTed twice (bootstrap + watcher can race).
     private var reportedEventKeys: Set<String> = []
-    
+
     /// Last known remote-start token. Required to compose PUT /endpoint
     /// requests (backend expects both tokens together).
     private var lastRemoteStartToken: String?
-    
+
     /// Backend-assigned subscriber id (mongodb ObjectId) returned by
     /// `POST /subscribers`
     private var subscriberId: String?
-    
+
     /// Activity update tokens that arrived before `POST /subscribers`
-    /// completed. Replayed after registration so the first `PUT /endpoint`
-    /// is not lost. Keyed by `activityId` — only the latest token per
-    /// activity matters, since the wire format is "current state of token".
+    /// completed (or before the push-to-start token was known). Replayed
+    /// later so the first `PUT /endpoint` is not lost. Keyed by `activityId`
+    /// — only the latest token per activity matters, since the wire format
+    /// is "current state of token".
     private var pendingUpdateTokens: [String: String] = [:]
-    
+
     init(
         repository: LiveActivityRepository,
         liveNotificationId: String,
@@ -116,19 +121,15 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         self.onContentStateUpdated = onContentStateUpdated
         self.onCampaignAlreadyActive = onCampaignAlreadyActive
     }
-    
-    deinit {
-        cancelTasks()
-    }
-    
+
     // Public lifecycle
-    
+
     func start() {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             statusHandler(.error(.activitiesNotEnabled))
             return
         }
-        
+
         observePushToStartToken()
         observeActivityLifecycle()
         adoptExistingActivities()
@@ -151,15 +152,21 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             prefetchImages(for: activity)
         }
     }
-    
-    /// Cancel local observation and unregister with backend.
-    func cancel() {
-        cancelTasks()
-        Task { [weak self] in
-            await self?.unregisterWithBackend()
-        }
+
+    /// Cancel local observation and unregister with backend. Nonisolated so
+    /// `LiveActivityManager` can call it through the type-erased protocol;
+    /// the Task holds `self` strongly until the backend DELETE completes —
+    /// otherwise removing the subscriber from the manager's dictionary could
+    /// deallocate it before the request is ever sent.
+    nonisolated func cancel() {
+        Task { await self.shutdown() }
     }
-    
+
+    private func shutdown() async {
+        cancelTasks()
+        await unregisterWithBackend()
+    }
+
     private func cancelTasks() {
         pushToStartTask?.cancel()
         pushToStartTask = nil
@@ -170,9 +177,9 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         }
         trackedActivities.removeAll()
     }
-    
+
     // Push-to-start token
-    
+
     private func observePushToStartToken() {
         pushToStartTask = Task { [weak self] in
             guard let self else { return }
@@ -181,12 +188,12 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             // async stream may emit late or not at all (known ActivityKit
             // behavior), while the token is already available synchronously.
             if let current = Activity<T>.pushToStartToken {
-                await self.handlePushToStartToken(Self.hexString(current))
+                await self.handlePushToStartToken(current.ppgHexString)
             }
 
             for await tokenData in Activity<T>.pushToStartTokenUpdates {
                 if Task.isCancelled { break }
-                await self.handlePushToStartToken(Self.hexString(tokenData))
+                await self.handlePushToStartToken(tokenData.ppgHexString)
             }
         }
     }
@@ -207,7 +214,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             await flushPendingUpdateTokens()
         }
     }
-    
+
     private func registerWithBackend(remoteStartToken: String) async {
         do {
             let id = try await repository.subscribe(
@@ -234,7 +241,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             statusHandler(.error(.registrationFailed(underlying: error)))
         }
     }
-    
+
     private func unregisterWithBackend() async {
         guard let subscriberId else {
             LiveActivityLogger.shared.debug(
@@ -258,9 +265,9 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             statusHandler(.error(.unregistrationFailed(underlying: error)))
         }
     }
-    
+
     // Late-subscriber bootstrap
-    
+
     /// Called after successful registration when the subscriber may have
     /// joined a campaign that is already ONGOING. Fetches the current
     /// campaign payload, delegates parsing and activity-start decision to
@@ -298,7 +305,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
                     liveNotificationId: liveNotificationId
                 )
             }
-            
+
             if let existing = Activity<T>.activities.first {
                 // Activity was already started by APNs push-to-start (possibly without countdown
                 // or other REST-only fields). Patch its ContentState with the full state from REST.
@@ -329,35 +336,38 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             )
         }
     }
-    
+
     // Activity lifecycle (push-to-start activities)
-    
+
     private func observeActivityLifecycle() {
         activityWatchTask = Task { [weak self] in
             guard let self else { return }
-            
+
             for await activity in Activity<T>.activityUpdates {
                 if Task.isCancelled { break }
-                
-                let activityId = activity.id
-                
-                // activityUpdates fires on every ContentState change too — only
-                // treat the activity as "new" if we are not already tracking it.
-                guard self.trackedActivities[activityId] == nil else { continue }
-                
-                LiveActivityLogger.shared.info(
-                    "Activity appeared [\(self.liveNotificationId)]: \(activityId)"
-                )
-                Self.logIncomingPayload(activity: activity)
-                self.onActivityAppeared?(activityId, self.liveNotificationId)
-                self.statusHandler(.activityStarted(activityId: activityId))
-                self.trackActivity(activity)
-                self.prefetchImages(for: activity)
-                self.reportEvent(.started, liveDataVersion: self.liveDataVersion(of: activity.content.state), activityId: activityId)
+                await self.handleActivityAppeared(activity)
             }
         }
     }
-    
+
+    private func handleActivityAppeared(_ activity: Activity<T>) {
+        let activityId = activity.id
+
+        // activityUpdates fires on every ContentState change too — only
+        // treat the activity as "new" if we are not already tracking it.
+        guard trackedActivities[activityId] == nil else { return }
+
+        LiveActivityLogger.shared.info(
+            "Activity appeared [\(liveNotificationId)]: \(activityId)"
+        )
+        Self.logIncomingPayload(activity: activity)
+        onActivityAppeared?(activityId, liveNotificationId)
+        statusHandler(.activityStarted(activityId: activityId))
+        trackActivity(activity)
+        prefetchImages(for: activity)
+        reportEvent(.started, liveDataVersion: liveDataVersion(of: activity.content.state), activityId: activityId)
+    }
+
     /// Download badge images referenced by the activity's attributes into the
     /// shared App Group cache, then nudge a same-content re-render so the
     /// widget swaps placeholders for the real badges. Required for the
@@ -394,22 +404,13 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         let tracker = ActivityTracker(
             activity: activity,
             onTokenUpdate: { [weak self] tokenHex in
-                guard let self else { return }
-                self.onActivityTokenUpdate?(activityId, tokenHex)
-                await self.forwardActivityUpdateToken(activityId: activityId, updateToken: tokenHex)
+                await self?.handleTokenUpdate(activityId: activityId, tokenHex: tokenHex)
             },
             onEnd: { [weak self] in
-                guard let self else { return }
-                self.reportEvent(.closed, liveDataVersion: self.lastLiveDataVersion[activityId] ?? 0, activityId: activityId)
-                self.onActivityCleared?(activityId)
-                self.statusHandler(.activityEnded(activityId: activityId))
-                self.trackedActivities.removeValue(forKey: activityId)
-                self.lastLiveDataVersion.removeValue(forKey: activityId)
+                await self?.handleActivityEnded(activityId: activityId)
             },
             onContentUpdate: { [weak self] state in
-                guard let self else { return }
-                self.lastLiveDataVersion[activityId] = self.liveDataVersion(of: state)
-                self.onContentStateUpdated?(activityId, state)
+                await self?.handleContentUpdate(activityId: activityId, state: state)
             }
         )
         trackedActivities[activityId] = tracker
@@ -418,13 +419,29 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         // Seed from the current update token — `pushTokenUpdates` does not
         // re-emit a token that was issued before this observer attached.
         if let tokenData = activity.pushToken {
-            let tokenHex = Self.hexString(tokenData)
+            let tokenHex = tokenData.ppgHexString
             Task { [weak self] in
-                guard let self else { return }
-                self.onActivityTokenUpdate?(activityId, tokenHex)
-                await self.forwardActivityUpdateToken(activityId: activityId, updateToken: tokenHex)
+                await self?.handleTokenUpdate(activityId: activityId, tokenHex: tokenHex)
             }
         }
+    }
+
+    private func handleTokenUpdate(activityId: String, tokenHex: String) async {
+        onActivityTokenUpdate?(activityId, tokenHex)
+        await forwardActivityUpdateToken(activityId: activityId, updateToken: tokenHex)
+    }
+
+    private func handleActivityEnded(activityId: String) {
+        reportEvent(.closed, liveDataVersion: lastLiveDataVersion[activityId] ?? 0, activityId: activityId)
+        onActivityCleared?(activityId)
+        statusHandler(.activityEnded(activityId: activityId))
+        trackedActivities.removeValue(forKey: activityId)
+        lastLiveDataVersion.removeValue(forKey: activityId)
+    }
+
+    private func handleContentUpdate(activityId: String, state: T.ContentState) {
+        lastLiveDataVersion[activityId] = liveDataVersion(of: state)
+        onContentStateUpdated?(activityId, state)
     }
 
     // Statistics events
@@ -480,7 +497,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             }
         }
     }
-    
+
     /// Replay any update tokens that were captured before
     /// `POST /subscribers` returned a `subscriberId`.
     private func flushPendingUpdateTokens() async {
@@ -491,7 +508,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             await forwardActivityUpdateToken(activityId: activityId, updateToken: token)
         }
     }
-    
+
     private func forwardActivityUpdateToken(activityId: String, updateToken: String) async {
         // Backend's PUT /endpoint requires `remoteStartToken` to be sent
         // alongside `updateToken`. ActivityKit can emit the activity update
@@ -507,7 +524,6 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             return
         }
 
-
         // ActivityKit emits the activity update token a moment after the
         // push-to-start token, so the POST may still be in flight here —
         // queue the latest token per activity and replay once registered.
@@ -518,7 +534,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             )
             return
         }
-        
+
         do {
             try await repository.updateSubscriberEndpoint(
                 liveNotificationId: liveNotificationId,
@@ -537,7 +553,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             statusHandler(.error(.endpointUpdateFailed(underlying: error)))
         }
     }
-    
+
     // Helpers
 
     /// Decode just `lifecycle.status` from the raw campaign payload so we can
@@ -548,10 +564,6 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         return try? JSONDecoder().decode(LifecycleStatusEnvelope.self, from: data).lifecycle.status
     }
 
-    private static func hexString(_ data: Data) -> String {
-        data.map { String(format: "%02x", $0) }.joined()
-    }
-    
     /// Diagnostic log for the payload that ActivityKit handed to us when a
     /// push-to-start activity appears:
     ///   - the `attributes` and `contentState` JSON received over APNs match
@@ -567,7 +579,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
         let stateJSON = jsonString(activity.content.state) ?? "<unencodable>"
         let stale = activity.content.staleDate.map { "\($0)" } ?? "nil"
         let relevance = "\(activity.content.relevanceScore)"
-        
+
         LiveActivityLogger.shared.info(
             """
             APNs payload received for activity \(activity.id):
@@ -577,7 +589,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
               relevanceScore = \(relevance)
             """
         )
-        
+
         if activity.content.staleDate == nil {
             LiveActivityLogger.shared.warning(
                 "APNs payload missing `aps.stale-date`. iOS will likely mark the activity as no-longer-relevant within ~1s. Backend must send `aps.stale-date` (unix seconds, e.g. now + 7200) on `event=start`."
@@ -589,7 +601,7 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
             )
         }
     }
-    
+
     private static func jsonString<V: Encodable>(_ value: V) -> String? {
         let enc = JSONEncoder()
         enc.outputFormatting = [.sortedKeys]
@@ -601,34 +613,29 @@ internal final class LiveNotificationSubscriber<T: ActivityAttributes>: LiveNoti
 // Per-activity tracker — own its tasks so cancellation is granular.
 @available(iOS 17.2, *)
 private final class ActivityTracker {
-    
+
     private let activityId: String
-    private let onTokenUpdate: @Sendable (String) async -> Void
-    private let onEnd: @Sendable () -> Void
     private var tokenTask: Task<Void, Never>?
     private var stateTask: Task<Void, Never>?
     private var contentTask: Task<Void, Never>?
     private let startTokenStream: () -> Task<Void, Never>
     private let startStateStream: () -> Task<Void, Never>
     private let startContentStream: () -> Task<Void, Never>
-    
+
     init<T: ActivityAttributes>(
         activity: Activity<T>,
         onTokenUpdate: @escaping @Sendable (String) async -> Void,
-        onEnd: @escaping @Sendable () -> Void,
-        onContentUpdate: @escaping @Sendable (T.ContentState) -> Void
+        onEnd: @escaping @Sendable () async -> Void,
+        onContentUpdate: @escaping @Sendable (T.ContentState) async -> Void
     ) {
         self.activityId = activity.id
-        self.onTokenUpdate = onTokenUpdate
-        self.onEnd = onEnd
-        
+
         // Capture activity in closures so we don't expose generics on ActivityTracker.
         self.startTokenStream = {
             Task {
                 for await tokenData in activity.pushTokenUpdates {
                     if Task.isCancelled { break }
-                    let tokenHex = tokenData.map { String(format: "%02x", $0) }.joined()
-                    await onTokenUpdate(tokenHex)
+                    await onTokenUpdate(tokenData.ppgHexString)
                 }
             }
         }
@@ -637,7 +644,7 @@ private final class ActivityTracker {
                 for await state in activity.activityStateUpdates {
                     if Task.isCancelled { break }
                     if state == .ended || state == .dismissed {
-                        onEnd()
+                        await onEnd()
                         return
                     }
                 }
@@ -647,18 +654,18 @@ private final class ActivityTracker {
             Task {
                 for await content in activity.contentUpdates {
                     if Task.isCancelled { break }
-                    onContentUpdate(content.state)
+                    await onContentUpdate(content.state)
                 }
             }
         }
     }
-    
+
     func start() {
         tokenTask = startTokenStream()
         stateTask = startStateStream()
         contentTask = startContentStream()
     }
-    
+
     func cancel() {
         tokenTask?.cancel()
         stateTask?.cancel()
@@ -667,7 +674,7 @@ private final class ActivityTracker {
         stateTask = nil
         contentTask = nil
     }
-    
+
     deinit {
         cancel()
     }

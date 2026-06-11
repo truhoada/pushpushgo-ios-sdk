@@ -181,7 +181,7 @@ internal class LiveActivityManager {
             onCampaignAlreadyActive: onCampaignAlreadyActive
         )
         subscribers[liveNotificationId] = subscriber
-        subscriber.start()
+        Task { await subscriber.start() }
         
         LiveActivityLogger.shared.info(
             "Subscribed to liveNotification: \(liveNotificationId)"
@@ -253,7 +253,7 @@ internal class LiveActivityManager {
             for await tokenData in activity.pushTokenUpdates {
                 guard !Task.isCancelled, let self else { break }
                 
-                let tokenHex = tokenData.map { String(format: "%02x", $0) }.joined()
+                let tokenHex = tokenData.ppgHexString
                 LiveActivityLogger.shared.debug(
                     "Push token [\(templateId)] \(activityId): \(tokenHex)"
                 )
