@@ -80,7 +80,8 @@ extension PPGHotMessage: Codable {
         id = try c.decodeIfPresent(String.self, forKey: .id)
             ?? UUID().uuidString
         if let epoch = try c.decodeIfPresent(Double.self, forKey: .timestamp) {
-            expiresAt = Date(timeIntervalSince1970: epoch)
+            let seconds = epoch > 1_000_000_000_000 ? epoch / 1000 : epoch
+            expiresAt = Date(timeIntervalSince1970: seconds)
         } else {
             expiresAt = Date().addingTimeInterval(Self.maxDisplayDuration)
         }

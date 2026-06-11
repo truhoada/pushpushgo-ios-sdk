@@ -210,17 +210,27 @@ public struct MatchActivityAttributes: ActivityAttributes {
             }
         }
         
+        /// Shared ISO-8601 formatters — `ISO8601DateFormatter` is thread-safe
+        /// and expensive to create, and this decode path runs on every push.
+        private static let isoFormatterFractional: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            return f
+        }()
+        private static let isoFormatter: ISO8601DateFormatter = {
+            let f = ISO8601DateFormatter()
+            f.formatOptions = [.withInternetDateTime]
+            return f
+        }()
+
         /// Decode a Date that may arrive as an ISO-8601 string (backend APNs) or as a
         /// Double Unix timestamp (ActivityKit's internal round-trip after `activity.update()`).
         private static func decodeDateField(
             from c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys
         ) -> Date? {
             if let raw = try? c.decodeIfPresent(String.self, forKey: key) {
-                let f = ISO8601DateFormatter()
-                f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                if let d = f.date(from: raw) { return d }
-                f.formatOptions = [.withInternetDateTime]
-                return f.date(from: raw)
+                if let d = Self.isoFormatterFractional.date(from: raw) { return d }
+                return Self.isoFormatter.date(from: raw)
             }
             return try? c.decodeIfPresent(Date.self, forKey: key)
         }
