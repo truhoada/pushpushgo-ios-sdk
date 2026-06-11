@@ -1,6 +1,16 @@
 #  Setup Guide
 
 > [!IMPORTANT]
+> 🎉 **New Feature: Live Activities SDK**
+>
+> Display real-time activity tracking on the Lock Screen and in the Dynamic Island,
+> driven by backend push (push-to-start, live updates, hot messages).
+> Includes a pre-built football match template. Custom templates support soon.
+> Requires iOS 17.2+. For the integration guide, see the
+> [Live Activities README](Sources/PPG_LiveActivities/README.md).
+>
+> ---
+>
 > **Version 4.0.0 - Major Release**
 >
 > 🎉 **New Feature: In-App Messages SDK**

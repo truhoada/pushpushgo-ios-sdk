@@ -1,22 +1,30 @@
 # PPG Live Activities SDK for iOS
 
-Display real-time activity tracking on the Lock Screen and Dynamic Island. Includes a pre-built football match template and supports custom templates.
+Live match tracking on the Lock Screen and in the Dynamic Island, driven by
+the PushPushGo backend. Your app integrates the SDK once and subscribes a
+device to a campaign — starting the activity, updating the score, showing
+hot messages and ending the match are all done server-side through the PPG
+panel / REST API. The app does not need to be running.
+
+```
+PPG panel / REST API ──▶ PPG backend ──▶ APNs ──▶ Live Activity on the device
+                                ▲
+   your app ── subscribe(id) ───┘   (one-time, via this SDK)
+```
 
 ## Requirements
 
 - iOS 17.2+
-- Swift 5.9+
-- Xcode 15.0+
+- Swift 5.9+, Xcode 15.0+
+- An APNs certificate/key uploaded to your PPG project ([tutorial](https://docs.pushpushgo.company/application/providers/mobile-push/apns))
 
 ## Installation
 
-### Swift Package Manager (Recommended)
+### Swift Package Manager (recommended)
 
-In Xcode:
-
-1. File → Add Package Dependencies...
+1. Xcode → File → Add Package Dependencies…
 2. Enter: `https://github.com/ppgco/ios-sdk`
-3. Select `PPG_LiveActivities` product
+3. Select the `PPG_LiveActivities` product — add it to **both** the app target and the Widget Extension target (created in Step 3 below).
 
 ### CocoaPods
 
@@ -24,45 +32,59 @@ In Xcode:
 pod 'PPG_LiveActivities', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.2.0'
 ```
 
-Then run:
+## App setup (one-time)
 
-```bash
-pod install
+### Step 1: App Group
+
+The Widget Extension runs in a separate process — team badges, design and
+hot-message state are shared through an App Group container.
+
+1. Apple Developer portal → enable an App Group on **both** your app's bundle id and your widget extension's bundle id (e.g. `group.com.your.app.liveactivities`).
+2. Xcode → both targets → Signing & Capabilities → **+ Capability → App Groups** → tick the same group.
+3. Use that exact id everywhere below.
+
+### Step 2: Info.plist keys
+
+In the **app target's** Info.plist:
+
+```xml
+<key>NSSupportsLiveActivities</key>
+<true/>
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array><string>ppg-la</string></array>
+  </dict>
+</array>
 ```
 
-## Quick Start
+`ppg-la` is the SDK-owned URL scheme used by Live Activity taps and action
+buttons (Step 5 wires it up).
 
-### Step 1: Configure App Group (required)
+### Step 3: Initialize the SDK
 
-The Widget Extension runs in a separate process and cannot share memory with
-your app. Team badges and hot-message state are persisted in a shared
-App Group container.
-
-1. Apple Developer portal → enable an App Group on **both** your app's bundle id
-   and your widget extension bundle id (e.g. `group.com.your.app.liveactivities`).
-2. Xcode → both targets → Signing & Capabilities → **+ Capability → App Groups**
-   and tick the same group.
-3. Use that exact id in the SDK init below and in the Widget Extension setup.
-
-### Step 2: Initialize the SDK
+Call `initialize` from `application(_:didFinishLaunchingWithOptions:)` (or
+your SwiftUI `App.init`). **It must run on every launch, including background
+launches** — when a match starts while your app is terminated, iOS wakes it
+briefly and this is the SDK's only window to capture push tokens.
 
 ```swift
 import PPG_LiveActivities
 
-// In AppDelegate.application(_:didFinishLaunchingWithOptions:) or App init
 LiveActivitiesSDK.shared.initialize(
     apiKey: "YOUR_API_KEY",
     projectId: "YOUR_PROJECT_ID",
-    appGroupId: "group.com.your.app.liveactivities" // example
+    appGroupId: "group.com.your.app.liveactivities",
+    isDebug: true            // verbose logs while integrating; remove for release
 )
 ```
 
-### Step 3: Add a Widget Extension
+### Step 4: Add the Widget Extension
 
-1. Xcode → File → New → Target → **Widget Extension**.
-2. Add `PPG_LiveActivities` as a dependency for the widget target.
-3. Inside the widget bundle's `init`, point the image manager at the same
-   App Group so cached badges become visible to widget views:
+1. Xcode → File → New → Target → **Widget Extension** (no need for the "Include Live Activity" checkbox — the SDK ships the views).
+2. Add `PPG_LiveActivities` as a dependency of the widget target and enable the same App Group on it.
+3. Replace the generated widget with:
 
 ```swift
 import WidgetKit
@@ -81,306 +103,272 @@ struct MatchLiveActivityWidget: Widget {
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: MatchActivityAttributes.self) { context in
-            // Lock Screen
-            PPGMatchLockScreenView(context: context)
+            PPGMatchLockScreenView(context: context)      // Lock Screen
         } dynamicIsland: { context in
-            // Dynamic Island
-            PPGMatchDynamicIsland(context: context).body()
+            PPGMatchDynamicIsland(context: context).body() // Dynamic Island
         }
     }
 }
 ```
 
-### Step 4: Start a Match Activity from a backend payload (recommended)
+### Step 5: Handle taps
 
-In production the activity is driven by the PPG backend. Decode the
-`PPGLiveNotificationDTO` from your in-app event / push and use the
-`from(dto:)` factory — it builds both the static attributes and the initial
-`ContentState` in one shot:
-
-```swift
-let dto = try JSONDecoder().decode(PPGLiveNotificationDTO.self, from: jsonData)
-
-guard let (attributes, initialState) = MatchActivityAttributes.from(dto: dto) else {
-    return  // not a football-match template
-}
-
-// Prefetch team badges into the App Group so the widget can render them.
-await LiveActivityImageManager.shared.prefetch(from: [
-    attributes.homeTeamBadgeUrl,
-    attributes.awayTeamBadgeUrl
-].compactMap { $0 })
-
-let activityId = LiveActivitiesSDK.shared.startActivity(
-    attributes: attributes,
-    initialState: initialState,
-    templateId: "match"
-)
-```
-
-### Step 5: Update During the Match
-
-Field names mirror the backend APNs `content-state` payload
-(`homeTeamScore`, `awayTeamScore`, `status`).
+Taps on the activity body and on action buttons are delivered to your app as
+`ppg-la://…` URLs. Route them through the SDK — it records click statistics
+and opens the right destination (`http/https` → browser, CLOSE buttons →
+your handler):
 
 ```swift
-LiveActivitiesSDK.shared.updateActivity(
-    MatchActivityAttributes.self,
-    activityId: activityId!,
-    state: MatchActivityAttributes.ContentState(
-        homeTeamScore: 1,
-        awayTeamScore: 0,
-        status: .firstHalf
-    )
-)
-```
-
-### Step 6: End the Match
-
-```swift
-LiveActivitiesSDK.shared.endActivity(
-    MatchActivityAttributes.self,
-    activityId: activityId!,
-    finalState: MatchActivityAttributes.ContentState(
-        homeTeamScore: 2,
-        awayTeamScore: 1,
-        status: .matchEnded
-    ),
-    dismissPolicy: .default  // Stays on Lock Screen for ~4 hours
-)
-```
-
-## Hot Messages
-
-`ContentState.hotMessage` renders a transient banner in the Lock Screen and
-Dynamic Island (taking priority over the CTA). Visibility is the **minimum**
-of two cutoffs:
-
-- **Local cap** — `PPGHotMessage.maxDisplayDuration` (10 s by default).
-- **Backend cutoff** — `expiresAt` (Unix epoch wire field `timestamp`).
-
-The SDK schedules a deterministic `Activity.update` at the computed end
-instant so the banner disappears even if the widget's `TimelineView`
-updates are deferred under render-budget pressure. Send the same content
-state with `hotMessage: nil` to clear it early.
-
-```swift
-LiveActivitiesSDK.shared.updateActivity(
-    MatchActivityAttributes.self,
-    activityId: activityId!,
-    state: MatchActivityAttributes.ContentState(
-        homeTeamScore: 1,
-        awayTeamScore: 0,
-        status: .firstHalf,
-        hotMessage: PPGHotMessage(
-            id: "var-cancelled-1",
-            text: "Goal cancelled after VAR",
-            expiresAt: Date(timeIntervalSinceNow: 30) // hard cutoff
-        )
-    )
-)
-```
-
-## Adding a New Template
-
-All lifecycle methods are generic — they work with **any** `ActivityAttributes` type.
-Adding a new template requires **zero changes** to the SDK core:
-
-1. Define your `ActivityAttributes`:
-```swift
-struct DeliveryActivityAttributes: ActivityAttributes {
-    let orderId: String
-    let restaurantName: String
-    
-    struct ContentState: Codable, Hashable {
-        let status: String
-        let estimatedArrival: Date
+// SwiftUI
+.onOpenURL { url in
+    if !LiveActivitiesSDK.handleURL(url, closeHandler: { _ in
+        LiveActivitiesSDK.shared.endAllActivities(ofType: MatchActivityAttributes.self)
+    }) {
+        // not an SDK URL — route your own deep links here
     }
 }
 ```
 
-2. Create SwiftUI views for Lock Screen and Dynamic Island
-3. Register in your Widget Extension via `ActivityConfiguration(for: DeliveryActivityAttributes.self)`
-4. Use the same SDK methods — generics handle everything:
+(UIKit: call the same from `application(_:open:options:)`.)
+
+Setup done — everything below is the runtime flow.
+
+## The match flow (end to end)
+
+| Phase | Who does it | How |
+|---|---|---|
+| 1. Create campaign | You (panel / your backend) | PPG panel or `POST /live-notifications/football-match-tracking` |
+| 2. Subscribe device | Your app (this SDK) | `subscribe(liveNotificationId:)` |
+| 3. Start | PPG backend | push-to-start at the scheduled time (or bootstrap, see 3b) |
+| 4. Score / hot messages | You (panel / your backend) | `PUT /live-data`, `POST /hot-messages` |
+| 5. End | You (panel / your backend) | `POST /stop` |
+| 6. Unsubscribe (optional) | Your app | `unsubscribe(liveNotificationId:)` |
+
+All REST calls below use base `https://api.pushpushgo.com` and headers
+`X-Token: <API key>` + `Content-Type: application/json`.
+
+### 1. Create the campaign
+
+Create the Live Activity in the PPG panel (teams, badges, colors, action
+buttons, schedule) — or via REST:
+`POST /core/projects/{projectId}/live-notifications/football-match-tracking`.
+
+Either way you get the campaign id (**`liveNotificationId`**, a 24-char hex
+id). Deliver it to your app however you like — a regular push, your own API,
+a hardcoded fixture list.
+
+### 2. Subscribe the device
+
+Call when the user opts in (e.g. taps "Follow match") — and again on every
+app launch while the campaign is active, so observers re-attach after a
+relaunch (`subscribe` is idempotent):
 
 ```swift
-let id = LiveActivitiesSDK.shared.startActivity(
-    attributes: DeliveryActivityAttributes(orderId: "456", restaurantName: "Pizza Place"),
-    initialState: .init(status: "preparing", estimatedArrival: Date().addingTimeInterval(1800)),
-    templateId: "delivery"
-)
-
-LiveActivitiesSDK.shared.updateActivity(
-    DeliveryActivityAttributes.self,
-    activityId: id!,
-    state: .init(status: "on_the_way", estimatedArrival: Date().addingTimeInterval(900))
-)
-
-LiveActivitiesSDK.shared.endActivity(
-    DeliveryActivityAttributes.self,
-    activityId: id!,
-    finalState: .init(status: "delivered", estimatedArrival: Date()),
-    dismissPolicy: .after(Date().addingTimeInterval(300))
-)
+LiveActivitiesSDK.shared.subscribe(
+    MatchActivityAttributes.self,
+    liveNotificationId: campaignId,
+    onCampaignAlreadyActive: { data in
+        // Late-subscriber bootstrap: the campaign is already ONGOING, so no
+        // push-to-start will come. Build the activity from the REST payload:
+        let dto = try PPGLiveNotificationDTO.decode(from: data)
+        return MatchActivityAttributes.from(dto: dto)
+    }
+) { status in
+    switch status {
+    case .registered:                  print("waiting for match start…")
+    case .activityStarted(let id):     print("Live Activity on screen: \(id)")
+    case .updateTokenSent:             break   // device can now receive updates
+    case .activityEnded:               print("match over")
+    case .unsubscribed:                break
+    case .error(let error):            print("LA error: \(error)")
+    }
+}
 ```
+
+The SDK registers the device on the PPG backend, manages all ActivityKit
+push tokens, and downloads the campaign's team badges into the App Group
+cache automatically.
+
+### 3. Match start — nothing to do in the app
+
+- **3a. Scheduled start (typical):** at the campaign's start the PPG backend
+  sends an APNs *push-to-start* — iOS creates the Live Activity even if your
+  app is terminated. You'll see `.activityStarted` if the app is running.
+- **3b. Late subscriber (bootstrap):** if the device subscribes when the
+  campaign is already ONGOING, no push-to-start will arrive — the SDK fetches
+  the campaign over REST and starts the activity locally via your
+  `onCampaignAlreadyActive` closure. Same UI, same updates afterwards.
+
+### 4. Drive the match
+
+Score / status changes (each one updates every subscribed device):
+
+```bash
+curl -X PUT "https://api.pushpushgo.com/core/projects/$PROJECT/live-notifications/$CAMPAIGN/live-data" \
+  -H "X-Token: $API_KEY" -H "Content-Type: application/json" \
+  -d '{ "homeTeamScore": 1, "awayTeamScore": 0, "status": "FIRST_HALF" }'
+```
+
+`status` takes any [match phase](#match-phases). Playing phases render a live
+match clock; breaks show a static minute marker (`45'`, `90'`, `105'`).
+
+Hot messages — a transient banner ("Goal!", "Red card #5") shown for up to
+10 seconds on the Lock Screen, in the expanded island, and in place of the
+clock in the compact island; each new message replaces the previous one:
+
+```bash
+curl -X POST "https://api.pushpushgo.com/core/projects/$PROJECT/live-notifications/$CAMPAIGN/hot-messages" \
+  -H "X-Token: $API_KEY" -H "Content-Type: application/json" \
+  -d '{ "text": "Goal cancelled after VAR" }'
+```
+
+### 5. End the match
+
+```bash
+curl -X POST "https://api.pushpushgo.com/core/projects/$PROJECT/live-notifications/$CAMPAIGN/stop" \
+  -H "X-Token: $API_KEY"
+```
+
+The activity ends on every device (iOS may keep it dimmed on the Lock Screen
+for up to ~4 h unless the user swipes it away).
+
+### 6. Unsubscribe (optional)
+
+For an in-app "Unfollow" action — deletes the subscriber on the backend, no
+further pushes reach the device:
+
+```swift
+LiveActivitiesSDK.shared.unsubscribe(liveNotificationId: campaignId)
+```
+
+## What the user sees
+
+- **Lock Screen** — campaign title + live match clock, team badges and names,
+  score, status label (texts configured per-campaign in the panel), hot
+  message banner on top, up to two action buttons.
+- **Dynamic Island compact** — home badge · score · away badge on the left;
+  live clock (or break minute, or hot message text) on the right.
+- **Dynamic Island expanded** — Lock Screen-style layout with buttons.
+- **Action buttons** — the first action's alignment (`LEFT`/`CENTER`/`RIGHT`/
+  `STRETCH`) lays out the whole group; colors, border and corner radius are
+  per-button. The island always uses the dark-mode variant of each action.
 
 ## Match Phases
 
-The SDK provides a complete `MatchPhase` enum with all football match states:
+The **DI compact** column is what the compact island's trailing slot shows:
+a live counting clock for playing phases (requires `statusChangedAt` in the
+content state — the PPG backend sets it automatically) or a static,
+language-neutral minute marker when the clock is stopped.
 
-| Phase | Display Text | State |
-|-------|-------------|-------|
-| `PRE_MATCH` | Pre-Match | Before kickoff |
-| `FIRST_HALF` | 1st Half | Playing |
-| `FIRST_HALF_ADDED_TIME` | 1st Half +AT | Playing |
-| `HALF_TIME_BREAK` | Half Time | Break |
-| `SECOND_HALF` | 2nd Half | Playing |
-| `SECOND_HALF_ADDED_TIME` | 2nd Half +AT | Playing |
-| `FULL_TIME` | Full Time | Finished |
-| `EXTRA_TIME_BREAK` | ET Break | Break |
-| `EXTRA_TIME_FIRST_HALF` | ET 1st Half | Playing |
-| `EXTRA_TIME_FIRST_HALF_ADDED_TIME` | ET 1st Half +AT | Playing |
-| `EXTRA_TIME_HALF_TIME_BREAK` | ET Half Time | Break |
-| `EXTRA_TIME_SECOND_HALF` | ET 2nd Half | Playing |
-| `EXTRA_TIME_SECOND_HALF_ADDED_TIME` | ET 2nd Half +AT | Playing |
-| `PENALTY_SHOOTOUT` | Penalties | Playing |
-| `MATCH_ENDED` | Match Ended | Finished |
-| `OTHER` | — | Fallback / unknown |
+| Phase | State | DI compact |
+|-------|-------|------------|
+| `PRE_MATCH` | Before kickoff | — (countdown in leading slot) |
+| `FIRST_HALF` | Playing | live clock |
+| `FIRST_HALF_ADDED_TIME` | Playing | live clock (`45+…`) |
+| `HALF_TIME_BREAK` | Break | `45'` |
+| `SECOND_HALF` | Playing | live clock |
+| `SECOND_HALF_ADDED_TIME` | Playing | live clock (`90+…`) |
+| `FULL_TIME` | Finished | `90'` |
+| `EXTRA_TIME_BREAK` | Break | `90'` |
+| `EXTRA_TIME_FIRST_HALF` | Playing | live clock |
+| `EXTRA_TIME_FIRST_HALF_ADDED_TIME` | Playing | live clock (`105+…`) |
+| `EXTRA_TIME_HALF_TIME_BREAK` | Break | `105'` |
+| `EXTRA_TIME_SECOND_HALF` | Playing | live clock |
+| `EXTRA_TIME_SECOND_HALF_ADDED_TIME` | Playing | live clock (`120+…`) |
+| `PENALTY_SHOOTOUT` | Playing | `120'` |
+| `MATCH_ENDED` | Finished | — |
+| `OTHER` | Fallback / unknown | — |
 
-## Subscriber API (Recommended for Production)
+## Alternative: app-driven activities (no PPG backend)
 
-Production Live Activities are driven entirely by PPG backend push.
-`subscribe(liveNotificationId:)` registers this device for a specific
-Live Notification. Backend handles `event:start`, `event:update`, and
-`event:end` via APNs.
-
-### How it works
-
-1. Backend creates a Live Notification (`POST /core/projects/{project}/live-notifications/football-match-tracking`) and returns its `id`.
-2. App calls `LiveActivitiesSDK.shared.subscribe(MatchActivityAttributes.self, liveNotificationId: id)`.
-3. SDK generates / reuses a persistent `installationId` (UUIDv4 in `UserDefaults`) and listens on `Activity<T>.pushToStartTokenUpdates`.
-4. On every new push-to-start token, SDK POSTs `/live-notifications/{id}/subscribers` with `{ installationId, endpoint:{ transport: "APNS", remoteStartToken } }`.
-5. Backend pushes `event:start` → OS creates the Live Activity locally with the right `attributes` + initial `content-state`.
-6. SDK forwards every rotated `activity.pushTokenUpdates` token via PUT `/subscribers/{installationId}/endpoint` so subsequent `event:update` pushes can target this device.
-7. `event:end` (no content-state) ends the activity. `unsubscribe(liveNotificationId:)` deletes the subscriber on the backend.
-
-### Usage
+For development, demos, or when your app drives the content itself, the SDK
+exposes the full local lifecycle. Activities started this way are **not**
+reachable by PPG backend pushes.
 
 ```swift
-// User taps "Follow match" button
-LiveActivitiesSDK.shared.subscribe(
+// Start (badges must be prefetched manually in this flow)
+let dto = try PPGLiveNotificationDTO.decode(from: jsonData)
+guard let (attributes, initialState) = MatchActivityAttributes.from(dto: dto) else { return }
+
+let activityId = LiveActivitiesSDK.shared.startActivity(
+    attributes: attributes, initialState: initialState, templateId: "match"
+)
+
+// Update — including hot messages via ContentState.hotMessage
+LiveActivitiesSDK.shared.updateActivity(
     MatchActivityAttributes.self,
-    liveNotificationId: "69f84d8daddcd1d291038d91"
-) { status in
-    switch status {
-    case .registered:
-        print("Subscriber registered, waiting for match start…")
-    case .activityStarted(let id):
-        print("Live Activity started: \(id)")
-    case .updateTokenSent(let id):
-        print("Update token forwarded for \(id)")
-    case .activityEnded(let id):
-        print("Activity ended: \(id)")
-    case .unsubscribed:
-        print("Subscriber removed")
-    case .error(let error):
-        print("Subscriber error: \(error)")
-    }
-}
+    activityId: activityId!,
+    state: .init(homeTeamScore: 1, awayTeamScore: 0, status: .firstHalf)
+)
 
-// To stop receiving updates
-LiveActivitiesSDK.shared.unsubscribe(liveNotificationId: "69f84d8daddcd1d291038d91")
-```
-
-### Subscriber vs Local Start
-
-| Feature | `subscribe(liveNotificationId:)` | `startActivity` |
-|---|---|---|
-| Who starts? | PPG backend (via push) | App code (locally) |
-| App must be open? | No (after registration) | Yes |
-| Best for | Production | Development / testing |
-| REST endpoints | `/live-notifications/{id}/subscribers` | none |
-
-## Push Token Management
-
-The SDK automatically handles ActivityKit push tokens for subscribed
-notifications:
-
-- **Push-to-start token**: posted to `/subscribers` on first observation and on every rotation.
-- **Activity update token**: forwarded to `/subscribers/{installationId}/endpoint` once the activity exists.
-- **`installationId`**: stable UUIDv4 generated and persisted by the SDK — not the same as `PPG.subscriberId` from the push SDK.
-
-## Dismiss Policies
-
-Control when ended activities are removed from the Lock Screen:
-
-```swift
-// Remove immediately
-.immediate
-
-// Keep for a specific duration
-.after(Date().addingTimeInterval(3600))  // 1 hour
-
-// System default (~4 hours)
-.default
+// End
+LiveActivitiesSDK.shared.endActivity(
+    MatchActivityAttributes.self,
+    activityId: activityId!,
+    finalState: .init(homeTeamScore: 2, awayTeamScore: 1, status: .matchEnded),
+    dismissPolicy: .default   // .immediate / .after(Date) / .default (~4 h)
+)
 ```
 
 ## Troubleshooting
 
 ### Live Activity not appearing?
 
-1. **Check permissions**: `LiveActivitiesSDK.shared.areActivitiesEnabled()`
-2. **Enable debug logging**:
-   ```swift
-   LiveActivitiesSDK.shared.initialize(
-       apiKey: "...",
-       projectId: "...",
-       isDebug: true
-   )
-   ```
-3. **Verify Widget Extension** is properly configured and includes `PPG_LiveActivities`
-4. **Check device**: Live Activities require iPhone with iOS 17.2+. Dynamic Island requires iPhone 14 Pro or later.
+1. **Permissions**: `LiveActivitiesSDK.shared.areActivitiesEnabled()` must be
+   `true` (Settings → Face ID & Passcode → Live Activities, and the per-app
+   toggle).
+2. **Physical device** with iOS 17.2+; push-to-start does not work in the
+   simulator. Dynamic Island requires iPhone 14 Pro or later.
+3. **Subscribe order**: the device must be subscribed before the campaign
+   starts — or pass `onCampaignAlreadyActive` so late subscribers bootstrap.
+4. Enable `isDebug: true` and watch the logs: you should see
+   `Subscriber registered…`, then `Activity appeared…`.
 
 ### Push updates not working?
 
-- Ensure your app has the Push Notifications capability
-- The `NSSupportsLiveActivities` key must be `YES` in your app's `Info.plist`
-- Check that the push token was registered (debug logs)
+- With `isDebug: true` you should see `Update token forwarded for activity …`
+  after the activity appears — if not, the backend has no update token for
+  this device.
+- **APNs environment must match the build**: a sandbox/test PPG project
+  delivers only to development-signed builds (run from Xcode);
+  TestFlight/App Store builds use the production APNs environment. A mismatch
+  fails silently — subscription works (it's HTTPS) but no push ever arrives.
+  An expired or revoked APNs certificate fails the same silent way.
+- On-device diagnosis: install Apple's **ActivityKit logging profile**
+  (developer.apple.com → Profiles & Logs), then in Console.app filter
+  Subsystem = `co.pushpushgo.PPG_LiveActivities` (SDK logs from app and
+  widget) and Process = `liveactivitiesd` / `apsd` (system push delivery).
+
+### Badges not showing?
+
+- The App Group id must be identical in `initialize(...)`,
+  `configureWidgetExtension(...)` and both targets' capabilities.
+- In the subscriber flow badges download automatically right after the
+  activity appears (placeholders swap to real badges within seconds); in the
+  local-start flow prefetch them yourself (see the alternative flow above).
 
 ## API Reference
 
-### Essential Methods
-
 ```swift
-// Initialize SDK
-initialize(
-    apiKey: String,
-    projectId: String,
-    appGroupId: String,
-    isProduction: Bool = true,
-    isDebug: Bool = false
-)
-
-// Check availability
+// Setup
+initialize(apiKey:projectId:appGroupId:isProduction:isDebug:)
+LiveActivitiesSDK.configureWidgetExtension(appGroupId:)   // widget process
 areActivitiesEnabled() -> Bool
+LiveActivitiesSDK.handleURL(_:closeHandler:) -> Bool      // tap routing
 
-// Subscriber API (production — backend-driven)
-subscribe<T>(_ type: T.Type, liveNotificationId: String, onStatus:)
-unsubscribe(liveNotificationId: String)
+// Production (backend-driven)
+subscribe<T>(_ type:, liveNotificationId:, onCampaignAlreadyActive:, onStatus:)
+unsubscribe(liveNotificationId:)
 
-// Local lifecycle (development/testing or custom flows)
-startActivity<T>(attributes: T, initialState: T.ContentState, templateId: String) -> String?
-updateActivity<T>(_ type: T.Type, activityId: String, state: T.ContentState)
-endActivity<T>(_ type: T.Type, activityId: String, finalState: T.ContentState?, dismissPolicy:)
-
-// Management
-endAllActivities<T>(ofType: T.Type)
+// Local lifecycle (development / app-driven)
+startActivity<T>(attributes:initialState:templateId:) -> String?
+updateActivity<T>(_ type:, activityId:, state:)
+endActivity<T>(_ type:, activityId:, finalState:, dismissPolicy:)
+endAllActivities<T>(ofType:)
 getActiveActivities() -> [LiveActivityInfo]
 ```
 
 ## Support
-
-For issues, feature requests, or questions:
 
 - GitHub Issues: https://github.com/ppgco/ios-sdk/issues
 - Documentation: https://docs.pushpushgo.com
