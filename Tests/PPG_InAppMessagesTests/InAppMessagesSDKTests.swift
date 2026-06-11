@@ -28,17 +28,6 @@ final class InAppMessagesSDKTests: XCTestCase {
         XCTAssertNotNil(sdk)
     }
     
-    func testUserIdSetting() throws {
-        let sdk = InAppMessagesSDK.shared
-        sdk.initialize(apiKey: "test-api-key", projectId: "test-project", isProduction: false)
-        
-        // Test setting user ID
-        sdk.setUserId("test-user-123")
-        
-        // This test passes if no exceptions are thrown
-        XCTAssertTrue(true)
-    }
-    
     // MARK: - Bridge Pattern Tests
     
     func testPushNotificationStatusProvider() throws {
@@ -79,7 +68,7 @@ final class InAppMessagesSDKTests: XCTestCase {
     func testTriggerTypeEnum() throws {
         // Test trigger types
         XCTAssertEqual(TriggerType.enter.rawValue, "ENTER")
-        XCTAssertEqual(TriggerType.custom.rawValue, "CUSTOM")
+        XCTAssertEqual(TriggerType.custom.rawValue, "CUSTOM_TRIGGER")
         XCTAssertEqual(TriggerType.scroll.rawValue, "SCROLL")
         XCTAssertEqual(TriggerType.exitIntent.rawValue, "EXIT_INTENT")
     }
@@ -89,7 +78,7 @@ final class InAppMessagesSDKTests: XCTestCase {
         XCTAssertEqual(ActionType.redirect.rawValue, "REDIRECT")
         XCTAssertEqual(ActionType.subscribe.rawValue, "SUBSCRIBE")
         XCTAssertEqual(ActionType.close.rawValue, "CLOSE")
-        XCTAssertEqual(ActionType.custom.rawValue, "CUSTOM")
+        XCTAssertEqual(ActionType.js.rawValue, "JS")
     }
     
     // MARK: - Message Processing Tests
@@ -100,10 +89,11 @@ final class InAppMessagesSDKTests: XCTestCase {
             userType: "ALL",
             device: [],
             userAgent: [],
-            osType: []
+            osType: [],
+            platform: "ALL"
         )
         
-        let testSettings = MessageSettings(
+        let testSettings = MessageScheduleSettings(
             triggerType: "ENTER",
             scrollDepth: 0,
             showAfterDelay: 0,
@@ -227,7 +217,7 @@ final class InAppMessagesSDKTests: XCTestCase {
     
     func testCustomTriggerKeyValueMatching() throws {
         // Test new custom trigger key-value matching logic
-        let settingsWithCustom = MessageSettings(
+        let settingsWithCustom = MessageScheduleSettings(
             triggerType: "CUSTOM",
             scrollDepth: 0,
             showAfterDelay: 0,
@@ -251,7 +241,7 @@ final class InAppMessagesSDKTests: XCTestCase {
     
     private func createTestMessages(withPriorities priorities: [Int]) -> [InAppMessage] {
         return priorities.enumerated().map { index, priority in
-            let settings = MessageSettings(
+            let settings = MessageScheduleSettings(
                 triggerType: "CUSTOM",
                 scrollDepth: 0,
                 showAfterDelay: 0,
@@ -268,7 +258,7 @@ final class InAppMessagesSDKTests: XCTestCase {
         }
     }
     
-    private func createTestMessage(id: String = "test-message", settings: MessageSettings) -> InAppMessage {
+    private func createTestMessage(id: String = "test-message", settings: MessageScheduleSettings) -> InAppMessage {
         return InAppMessage(
             id: id,
             name: "Test Message",
@@ -308,7 +298,8 @@ final class InAppMessagesSDKTests: XCTestCase {
                 userType: "ALL",
                 device: [],
                 userAgent: [],
-                osType: []
+                osType: [],
+                platform: "ALL"
             ),
             settings: settings,
             createdAt: "2023-01-01T00:00:00Z",

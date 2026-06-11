@@ -8,7 +8,11 @@
 import Foundation
 import SwiftUI
 
-/// Represents all possible phases of a football match
+/// Represents all possible phases of a football match.
+///
+/// ⚠️ **`allCases` order is a wire contract.** The APNs `attributes` payload
+/// carries `statusLabels` as an ordered array where index `i` is the label
+/// for `MatchPhase.allCases[i]`
 @available(iOS 17.2, *)
 public enum MatchPhase: String, Codable, CaseIterable, Sendable {
     case preMatch = "PRE_MATCH"

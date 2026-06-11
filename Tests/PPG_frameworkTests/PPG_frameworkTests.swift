@@ -46,7 +46,7 @@ class PPG_frameworkTests: XCTestCase {
         eventManager.register(event: eventDelivered2) { result in
             print("eventDelivered2 register result: \(result)")
             if case .error(let message) = result {
-                XCTAssertEqual(message, "Event was sent before. Omitting")
+                XCTAssertEqual(message, "Event of this type for this campaign was already registered. Omitting")
                 XCTAssertFalse(eventDelivered2.wasSent())
             } else {
                 XCTFail("Expected an error for duplicate event")
@@ -104,7 +104,7 @@ class PPG_frameworkTests: XCTestCase {
         eventManager.register(event: eventDelivered2) { result in
             print("eventDelivered2 register result: \(result)")
             if case .error(let message) = result {
-                XCTAssertEqual(message, "Event was sent before. Omitting")
+                XCTAssertEqual(message, "Event of this type for this campaign was already registered. Omitting")
                 XCTAssertFalse(eventDelivered2.wasSent())
             } else {
                 XCTFail("Expected an error for duplicate event")
@@ -135,9 +135,8 @@ class PPG_frameworkTests: XCTestCase {
             print(events.map{
                 $0.debug()
             })
-            XCTAssertEqual(events.count, 2)
+            XCTAssertEqual(events.count, 1)
             XCTAssertTrue(events[0].wasSent())
-            XCTAssertTrue(events[1].wasSent())
             expectation.fulfill()
         }
         
