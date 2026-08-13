@@ -56,18 +56,44 @@ public enum LiveNotificationSubscriptionError: Error, Sendable {
 
 // Wire DTOs
 
+/// Whether this device can attach Live Activities to APNs broadcast
+/// channels (`ActivityKit` `PushType.channel`, iOS 18+). Reported to the
+/// backend in the subscriber endpoint so it can decide per device between
+/// the broadcast path (one request per campaign) and the per-token fan-out.
+@available(iOS 17.2, *)
+internal enum PPGChannelCapability {
+    static var isSupported: Bool {
+        if #available(iOS 18.0, *) { return true }
+        return false
+    }
+}
+
 /// Subscriber endpoint — `transport` + push tokens. iOS uses `APNS` and
 /// supplies one or both tokens (push-to-start + activity update).
+/// `isBroadcastChannel` tells the backend whether update/end pushes for this
+/// device can go through an APNs broadcast channel instead of the
+/// per-activity update token.
+///
+/// Wire shape is fixed by the backend's endpoint union:
+/// `{transport: APNS, remoteStartToken: string, updateToken: string, isBroadcastChannel: boolean}`.
+/// Unknown keys are silently dropped by the backend, so the name must match
+/// exactly — a typo degrades to the token path with no error anywhere.
 @available(iOS 17.2, *)
 internal struct PPGLiveNotificationSubscriberEndpoint: Codable, Sendable {
     let transport: String
     let remoteStartToken: String
     let updateToken: String?
-    
-    init(remoteStartToken: String, updateToken: String? = nil) {
+    let isBroadcastChannel: Bool
+
+    init(
+        remoteStartToken: String,
+        updateToken: String? = nil,
+        isBroadcastChannel: Bool = PPGChannelCapability.isSupported
+    ) {
         self.transport = "APNS"
         self.remoteStartToken = remoteStartToken
         self.updateToken = updateToken
+        self.isBroadcastChannel = isBroadcastChannel
     }
 }
 
@@ -118,5 +144,5 @@ internal struct PPGUpdateLiveNotificationEndpointRequest: Codable, Sendable {
 /// Update on every release tag.
 @available(iOS 17.2, *)
 internal enum PPGLiveActivitiesVersion {
-    static let current = "4.3.0"
+    static let current = "4.4.0"
 }

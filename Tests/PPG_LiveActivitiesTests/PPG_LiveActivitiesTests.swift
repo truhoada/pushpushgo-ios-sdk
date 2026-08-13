@@ -1069,4 +1069,123 @@ final class PPG_LiveActivitiesTests: XCTestCase {
         XCTAssertEqual(Data([0x80, 0x56, 0x00, 0xff]).ppgHexString, "805600ff")
         XCTAssertEqual(Data().ppgHexString, "")
     }
+
+    // MARK: - Broadcast channels (iOS 18+)
+
+    @available(iOS 17.2, *)
+    func testResolveStartModeTokenWhenNoChannel() {
+        XCTAssertEqual(
+            PPGCampaignProbe.resolveStartMode(channelId: nil, channelsSupported: true),
+            .token
+        )
+    }
+
+    @available(iOS 17.2, *)
+    func testResolveStartModeTokenWhenChannelsUnsupported() {
+        XCTAssertEqual(
+            PPGCampaignProbe.resolveStartMode(channelId: "chan-1", channelsSupported: false),
+            .token
+        )
+    }
+
+    @available(iOS 17.2, *)
+    func testResolveStartModeTokenWhenChannelIdEmpty() {
+        XCTAssertEqual(
+            PPGCampaignProbe.resolveStartMode(channelId: "", channelsSupported: true),
+            .token
+        )
+    }
+
+    @available(iOS 17.2, *)
+    func testResolveStartModeChannel() {
+        XCTAssertEqual(
+            PPGCampaignProbe.resolveStartMode(channelId: "chan-1", channelsSupported: true),
+            .channel("chan-1")
+        )
+    }
+
+    /// Real ONGOING campaign payload shape (trimmed) as returned by the backend.
+    @available(iOS 17.2, *)
+    func testCampaignProbeReadsApnsChannelFromBroadcastChannels() {
+        let json = Data(#"""
+        {"id":"6a7d","lifecycle":{"status":"ONGOING"},
+         "broadcastChannels":[{"type":"APNS","channelId":"j6dt9Zb5EfEAAJ75YSoKoQ=="}]}
+        """#.utf8)
+        XCTAssertEqual(PPGCampaignProbe.channelId(from: json), "j6dt9Zb5EfEAAJ75YSoKoQ==")
+    }
+
+    @available(iOS 17.2, *)
+    func testCampaignProbePicksApnsAmongTransports() {
+        let json = Data(#"""
+        {"broadcastChannels":[{"type":"FCM","channelId":"fcm-1"},
+                              {"type":"APNS","channelId":"apns-1"}]}
+        """#.utf8)
+        XCTAssertEqual(PPGCampaignProbe.channelId(from: json), "apns-1")
+    }
+
+    @available(iOS 17.2, *)
+    func testCampaignProbeIgnoresNonApnsOnlyPayload() {
+        let json = Data(#"{"broadcastChannels":[{"type":"FCM","channelId":"fcm-1"}]}"#.utf8)
+        XCTAssertNil(PPGCampaignProbe.channelId(from: json))
+    }
+
+    /// PENDING campaigns carry an empty array — the backend creates the
+    /// channel when the campaign starts.
+    @available(iOS 17.2, *)
+    func testCampaignProbeEmptyArrayIsTokenPath() {
+        let json = Data(#"{"lifecycle":{"status":"PENDING"},"broadcastChannels":[]}"#.utf8)
+        XCTAssertNil(PPGCampaignProbe.channelId(from: json))
+    }
+
+    @available(iOS 17.2, *)
+    func testCampaignProbeFieldAbsent() {
+        let json = Data(#"{"lifecycle":{"status":"ONGOING"}}"#.utf8)
+        XCTAssertNil(PPGCampaignProbe.channelId(from: json))
+    }
+
+    @available(iOS 17.2, *)
+    func testCampaignProbeWrongTypeIsTolerated() {
+        XCTAssertNil(PPGCampaignProbe.channelId(from: Data(#"{"broadcastChannels":"nope"}"#.utf8)))
+        XCTAssertNil(PPGCampaignProbe.channelId(from: Data(#"{"broadcastChannels":[{"type":"APNS","channelId":""}]}"#.utf8)))
+    }
+
+    @available(iOS 17.2, *)
+    func testCampaignProbeMalformedPayloadIsTolerated() {
+        XCTAssertNil(PPGCampaignProbe.channelId(from: Data("not json".utf8)))
+    }
+
+    @available(iOS 17.2, *)
+    func testSubscriberEndpointEncodesIsBroadcastChannel() throws {
+        let endpoint = PPGLiveNotificationSubscriberEndpoint(
+            remoteStartToken: "aabb",
+            updateToken: nil,
+            isBroadcastChannel: true
+        )
+        let data = try JSONEncoder().encode(endpoint)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        XCTAssertEqual(object["transport"] as? String, "APNS")
+        XCTAssertEqual(object["remoteStartToken"] as? String, "aabb")
+        // Exact wire name — the backend silently drops unknown keys, so a
+        // rename here degrades to the token path with no error.
+        XCTAssertEqual(object["isBroadcastChannel"] as? Bool, true)
+    }
+
+    @available(iOS 17.2, *)
+    func testSubscriberEndpointEncodesIsBroadcastChannelFalse() throws {
+        let endpoint = PPGLiveNotificationSubscriberEndpoint(
+            remoteStartToken: "ccdd",
+            updateToken: "eeff",
+            isBroadcastChannel: false
+        )
+        let data = try JSONEncoder().encode(endpoint)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        XCTAssertEqual(object["isBroadcastChannel"] as? Bool, false)
+        XCTAssertEqual(object["updateToken"] as? String, "eeff")
+    }
 }

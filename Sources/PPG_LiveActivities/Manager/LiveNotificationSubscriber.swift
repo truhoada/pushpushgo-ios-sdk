@@ -40,6 +40,53 @@ private struct LifecycleStatusEnvelope: Decodable {
     let lifecycle: Lifecycle
 }
 
+/// Probe helpers for the bootstrap path: tolerant extraction of the
+/// campaign's APNs broadcast `channelId` and the pure start-mode decision.
+@available(iOS 17.2, *)
+internal enum PPGCampaignProbe {
+
+    /// How a bootstrap-started activity registers for pushes.
+    enum StartMode: Equatable {
+        /// Per-activity update token (iOS 17.2+ path).
+        case token
+        /// APNs broadcast channel (iOS 18+, campaign has a channel).
+        case channel(String)
+    }
+
+    /// Campaign payload carries one broadcast channel per transport:
+    /// `"broadcastChannels": [{"type": "APNS", "channelId": "…"}]`.
+    /// The array is empty until the campaign goes ONGOING (the backend
+    /// creates the channel at start), which lines up with bootstrap only
+    /// running for ONGOING campaigns.
+    private struct ChannelEnvelope: Decodable {
+        struct Channel: Decodable {
+            let type: String?
+            let channelId: String?
+        }
+        let broadcastChannels: [Channel]?
+    }
+
+    /// APNs broadcast channel id from a raw campaign payload, or `nil` when
+    /// the campaign has none.
+    static func channelId(from data: Data) -> String? {
+        guard let channels = (try? JSONDecoder().decode(ChannelEnvelope.self, from: data))?.broadcastChannels else {
+            return nil
+        }
+        let apns = channels.first { $0.type?.uppercased() == "APNS" }
+        guard let id = apns?.channelId, !id.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return nil
+        }
+        return id
+    }
+
+    /// Broadcast is used only when the campaign has a channel AND the OS
+    /// supports ActivityKit channels (iOS 18+). Empty ids fall back to token.
+    static func resolveStartMode(channelId: String?, channelsSupported: Bool) -> StartMode {
+        guard channelsSupported, let id = channelId, !id.isEmpty else { return .token }
+        return .channel(id)
+    }
+}
+
 @available(iOS 17.2, *)
 internal actor LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificationSubscriberCancellable {
 
@@ -99,6 +146,12 @@ internal actor LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificati
     /// — only the latest token per activity matters, since the wire format
     /// is "current state of token".
     private var pendingUpdateTokens: [String: String] = [:]
+
+    /// Campaign's APNs broadcast channel id, probed from the GET payload
+    /// during bootstrap. Used only to pick the bootstrap start mode — the
+    /// unsubscribe path deliberately does not depend on it (see
+    /// `endCampaignActivities`).
+    private var campaignChannelId: String?
 
     init(
         repository: LiveActivityRepository,
@@ -163,8 +216,44 @@ internal actor LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificati
     }
 
     private func shutdown() async {
+        await endCampaignActivities()
         cancelTasks()
         await unregisterWithBackend()
+    }
+
+    /// End (immediately) this campaign's activities when the host app
+    /// unsubscribes.
+    ///
+    /// Deliberately unconditional. A channel-backed activity keeps receiving
+    /// broadcast updates for as long as it lives — a broadcast reaches every
+    /// channel subscriber and the backend cannot exclude one device — so
+    /// honoring an unsubscribe requires ending it locally. Distinguishing
+    /// channel-backed from token-backed activities is not reliably possible
+    /// on the client: ActivityKit exposes no getter for an activity's push
+    /// registration, and the only indirect signal (no update token observed)
+    /// cannot tell "never gets a token" apart from "token hasn't arrived
+    /// yet".
+    ///
+    /// Runs before `cancelTasks()` so the regular end flow (closed event,
+    /// manager cleanup) still fires.
+    private func endCampaignActivities() async {
+        for activity in Activity<T>.activities where belongsToThisCampaign(activity) {
+            await activity.end(nil, dismissalPolicy: .immediate)
+            LiveActivityLogger.shared.info(
+                "Unsubscribe: ended activity \(activity.id) for \(liveNotificationId)"
+            )
+        }
+    }
+
+    /// Best-effort campaign check for activities of the shared attributes
+    /// type. `PPGLiveActivityImagePrefetchable.imageCampaignId` carries the
+    /// `liveNotificationId` for PPG templates; attributes that don't conform
+    /// fall back to the subscriber's single-campaign assumption (`true`).
+    private func belongsToThisCampaign(_ activity: Activity<T>) -> Bool {
+        guard let prefetchable = activity.attributes as? PPGLiveActivityImagePrefetchable else {
+            return true
+        }
+        return prefetchable.imageCampaignId == liveNotificationId
     }
 
     private func cancelTasks() {
@@ -278,6 +367,16 @@ internal actor LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificati
         do {
             let data = try await repository.fetchCampaign(liveNotificationId: liveNotificationId)
 
+            // Remember the campaign's broadcast channel (if any) — selects the
+            // bootstrap start mode below and identifies channel-backed
+            // activities at unsubscribe time.
+            campaignChannelId = PPGCampaignProbe.channelId(from: data)
+            if let channelId = campaignChannelId {
+                LiveActivityLogger.shared.debug(
+                    "Campaign \(liveNotificationId) exposes broadcast channel \(channelId)"
+                )
+            }
+
             // Only bootstrap-start when the campaign is actually ONGOING.
             // For PENDING / scheduled campaigns the OS will start the activity
             // via push-to-start at `scheduledAt` — starting it here too would
@@ -316,14 +415,7 @@ internal actor LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificati
                 prefetchImages(for: existing)
             } else {
                 guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
-                let activity = try Activity.request(
-                    attributes: attrs,
-                    content: ActivityContent(state: state, staleDate: nil, relevanceScore: 50),
-                    pushType: .token
-                )
-                LiveActivityLogger.shared.info(
-                    "Bootstrap: started activity \(activity.id) for \(liveNotificationId)"
-                )
+                let activity = try startBootstrapActivity(attributes: attrs, state: state)
                 onActivityAppeared?(activity.id, liveNotificationId)
                 statusHandler(.activityStarted(activityId: activity.id))
                 trackActivity(activity)
@@ -335,6 +427,37 @@ internal actor LiveNotificationSubscriber<T: ActivityAttributes>: LiveNotificati
                 "Bootstrap failed for \(liveNotificationId): \(error.localizedDescription)"
             )
         }
+    }
+
+    /// Request the bootstrap activity with the right push registration:
+    /// broadcast channel on iOS 18+ when the campaign has one, otherwise the
+    /// per-activity update token (unchanged 17.2+ behavior).
+    private func startBootstrapActivity(attributes: T, state: T.ContentState) throws -> Activity<T> {
+        let content = ActivityContent(state: state, staleDate: nil, relevanceScore: 50)
+        let mode = PPGCampaignProbe.resolveStartMode(
+            channelId: campaignChannelId,
+            channelsSupported: PPGChannelCapability.isSupported
+        )
+        if #available(iOS 18.0, *), case .channel(let channelId) = mode {
+            let activity = try Activity.request(
+                attributes: attributes,
+                content: content,
+                pushType: .channel(channelId)
+            )
+            LiveActivityLogger.shared.info(
+                "Bootstrap: started activity \(activity.id) via broadcast channel \(channelId) for \(liveNotificationId)"
+            )
+            return activity
+        }
+        let activity = try Activity.request(
+            attributes: attributes,
+            content: content,
+            pushType: .token
+        )
+        LiveActivityLogger.shared.info(
+            "Bootstrap: started activity \(activity.id) via update token for \(liveNotificationId)"
+        )
+        return activity
     }
 
     // Activity lifecycle (push-to-start activities)

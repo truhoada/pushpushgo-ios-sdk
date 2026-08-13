@@ -29,7 +29,7 @@ PPG panel / REST API ──▶ PPG backend ──▶ APNs ──▶ Live Activit
 ### CocoaPods
 
 ```ruby
-pod 'PPG_LiveActivities', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.3.0'
+pod 'PPG_LiveActivities', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.4.0'
 ```
 
 ## App setup (one-time)
@@ -278,6 +278,38 @@ language-neutral minute marker when the clock is stopped.
 | `PENALTY_SHOOTOUT` | Playing | `120'` |
 | `MATCH_ENDED` | Finished | — |
 | `OTHER` | Fallback / unknown | — |
+
+## Delivery at scale: broadcast channels (iOS 18+)
+
+For large audiences the PPG backend can attach an APNs **broadcast channel**
+to a campaign. Updates and the end event are then published once per campaign
+(instead of once per device), so delivery time no longer grows with the
+subscriber count. Requires no integration work — behavior is negotiated
+automatically:
+
+- The SDK reports channel capability with every subscriber registration
+  (`endpoint.isBroadcastChannel`, `true` on iOS 18+); devices on iOS
+  17.2–17.x keep the per-token path.
+- Push-to-start remains per device; when the campaign has a channel the
+  backend includes `input-push-channel` and the created activity receives all
+  subsequent updates via broadcast.
+- Late-subscriber bootstrap starts the activity with `pushType: .channel(...)`
+  when the campaign exposes an APNs entry in `broadcastChannels`
+  (`[{"type": "APNS", "channelId": "…"}]`). The array is empty until the
+  campaign goes ONGOING, which is exactly when bootstrap applies.
+
+Behavioral notes in channel mode:
+
+- `updateTokenSent` never fires (channel-backed activities have no update
+  token) — this is expected, not a token-forwarding failure.
+- `unsubscribe(liveNotificationId:)` ends the campaign's activities locally.
+  A broadcast reaches every channel subscriber and the backend cannot
+  exclude one device, so opting a device out requires ending its activity.
+  This applies to both push registrations — the client cannot reliably tell
+  them apart, and ending the activity is what "stop following" implies
+  either way.
+- Statistics (`started` / `clicked` / `closed`) are unaffected — they are
+  reported by the SDK from the device.
 
 ## Alternative: app-driven activities (no PPG backend)
 
