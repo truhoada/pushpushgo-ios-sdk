@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'PPG_LiveActivities'
-  s.version          = '4.4.0'
+  s.version          = '4.4.1'
   s.summary          = 'PushPushGo Live Activities SDK for iOS.'
 
   # A more detailed description of the pod.

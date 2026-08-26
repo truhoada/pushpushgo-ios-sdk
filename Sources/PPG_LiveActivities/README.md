@@ -29,7 +29,7 @@ PPG panel / REST API ──▶ PPG backend ──▶ APNs ──▶ Live Activit
 ### CocoaPods
 
 ```ruby
-pod 'PPG_LiveActivities', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.4.0'
+pod 'PPG_LiveActivities', :git => 'https://github.com/ppgco/ios-sdk.git', :tag => '4.4.1'
 ```
 
 ## App setup (one-time)
@@ -317,10 +317,28 @@ For development, demos, or when your app drives the content itself, the SDK
 exposes the full local lifecycle. Activities started this way are **not**
 reachable by PPG backend pushes.
 
+Badges are the one thing the SDK does *not* do for you here — prefetch them
+before starting the activity, and use the **campaign-scoped** overload. The
+widget looks each badge up by `campaignId` + `imageType`, so a badge cached
+with the URL-only `prefetch(from:)` variant is never found and the views fall
+back to placeholders.
+
 ```swift
-// Start (badges must be prefetched manually in this flow)
+// Start
 let dto = try PPGLiveNotificationDTO.decode(from: jsonData)
 guard let (attributes, initialState) = MatchActivityAttributes.from(dto: dto) else { return }
+
+// Prefetch under the same scope the widget reads from
+if let url = attributes.content.homeTeamImage {
+    await LiveActivityImageManager.shared.prefetch(
+        from: url, imageType: .homeTeamBadge, campaignId: attributes.liveNotificationId
+    )
+}
+if let url = attributes.content.awayTeamImage {
+    await LiveActivityImageManager.shared.prefetch(
+        from: url, imageType: .awayTeamBadge, campaignId: attributes.liveNotificationId
+    )
+}
 
 let activityId = LiveActivitiesSDK.shared.startActivity(
     attributes: attributes, initialState: initialState, templateId: "match"
@@ -377,7 +395,12 @@ LiveActivitiesSDK.shared.endActivity(
   `configureWidgetExtension(...)` and both targets' capabilities.
 - In the subscriber flow badges download automatically right after the
   activity appears (placeholders swap to real badges within seconds); in the
-  local-start flow prefetch them yourself (see the alternative flow above).
+  local-start flow prefetch them yourself with
+  `prefetch(from:imageType:campaignId:)` — passing the same
+  `liveNotificationId` the attributes carry (see the alternative flow above).
+  Placeholders that never swap in that flow almost always mean the badge was
+  cached with the URL-only `prefetch(from:)` overload, which the widget's
+  `campaignId` + `imageType` lookup cannot see.
 
 ## API Reference
 

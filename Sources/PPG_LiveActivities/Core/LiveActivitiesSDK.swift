@@ -227,7 +227,13 @@ public class LiveActivitiesSDK {
     ///     }
     /// }
     /// ```
+    ///
+    /// Host-app only: routing a tap opens URLs through `UIApplication.shared`,
+    /// which is unavailable to app extensions. Marking it unavailable there
+    /// keeps the module compilable with `-application-extension`, which
+    /// CocoaPods turns on as soon as the widget extension links the pod.
     @discardableResult
+    @available(iOSApplicationExtension, unavailable)
     public static func handleURL(
         _ url: URL,
         closeHandler: ((String) -> Void)? = nil
