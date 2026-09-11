@@ -333,6 +333,15 @@ public class PPG: NSObject, UNUserNotificationCenterDelegate {
         
         return (nil, false)
     }
+
+    /// Objective-C compatible wrapper for the URL-only API.
+    /// The tuple-returning Swift API above cannot be exported to Objective-C.
+    @objc(getUrlFromNotificationResponseWithResponse:)
+    public static func getUrlFromNotificationResponseObjC(
+        response: UNNotificationResponse
+    ) -> URL? {
+        return getUrlFromNotificationResponse(response: response).0
+    }
     
     public static func modifyNotification(
         _ notification: UNMutableNotificationContent
